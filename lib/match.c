@@ -162,14 +162,11 @@ frec_match_heur(regex_t *preg, heur_t *heur, const void *str,
 			n = pmatch[0].m.rm_eo - pmatch[0].m.rm_so;
 
 			/* Intermediate heuristics (if any) */
-			while (!(heur->heurs[i] == NULL) &&
-			    ((heur->heurs[i + 1] != NULL) ||
-			    ((heur->heurs[i + 1] == NULL) &&
-			    (heur->type == HEUR_PREFIX_ARRAY)))) {
+			while (!(heur->heurs[i] == NULL)) {
 				SEEK_TO(st + n);
 				if (len <= st + n)
 					return (REG_NOMATCH);
-				DEBUG_PRINT("matching for intermediate heuristics");
+				DEBUG_PRINT("matching for further heuristics");
 				ret = frec_match_fast(heur->heurs[i], str,
 				    len - st - n, type, nmatch, pmatch,
 				    eflags);
@@ -179,39 +176,25 @@ frec_match_heur(regex_t *preg, heur_t *heur, const void *str,
 				i++;
 			}
 
+			size_t l;
 			/* Suffix heuristic available */
-			if ((heur->type == HEUR_ARRAY) &&
-			    heur->heurs[i] != NULL) {
-				DEBUG_PRINT("matching for suffix heuristics");
-				SEEK_TO(st + n);
-				if (len <= st + n)
-					return (REG_NOMATCH);
-				ret = frec_match_fast(heur->heurs[i], str,
-				    len - st - n, type, nmatch, pmatch,
-				    eflags);
-				if (ret != REG_OK)
-					return (ret);
-				n += pmatch[0].m.rm_eo;
-
-				SEEK_TO(st);
-				REGEXEC(preg, str, n, type,
-				    nmatch, pmatch, eflags);
-				FIX_OFFSETS(st += n);
+			if (heur->type == HEUR_ARRAY) {
+				DEBUG_PRINT("suffix heuristics available");
+				l = n;
 			}
 
 			/* Suffix heuristic not available */
 			else {
 				DEBUG_PRINT("suffix heuristics not available");
-				size_t l = (heur->tlen == -1) ? (len - st) :
+				l = (heur->tlen == -1) ? (len - st) :
 				    (size_t)(heur->tlen);
 
 				if (l > len - st)
 					return (REG_NOMATCH);
-				SEEK_TO(st);
-				REGEXEC(preg, str, l, type, nmatch,
-				    pmatch, eflags);
-				FIX_OFFSETS(st += n);
 			}
+			SEEK_TO(st);
+			REGEXEC(preg, str, l, type, nmatch, pmatch, eflags);
+			FIX_OFFSETS(st += n);
 		}
 		return (REG_NOMATCH);
 	}
