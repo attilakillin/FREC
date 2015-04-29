@@ -135,7 +135,7 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 		goto err;
 	}
 
-	h->type = HEUR_ARRAY;
+	h->type = HEUR_PREFIX;
 
 	while (true) {
 
@@ -299,16 +299,8 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 		st = len;
  
 end_segment:
-		/* Check if pattern is open-ended */
-		if (st == len && pos == 0) {
-			if (j == 0) {
-				errcode = REG_BADPAT;
-				goto err;
-			}
-			h->type = HEUR_PREFIX_ARRAY;
-			goto ok;
-		} else if (pos == 0)
-			/* Continue if we got some variable-length part */
+		/* Continue if we got some variable-length part */
+		if (pos == 0)
 			continue;
 
 		/* Too many fragments - should never happen but to be safe */
@@ -340,77 +332,43 @@ ok:
 
 		h->tlen = tlen;
 
-		/* Look up maximum length fragment */
-		for (i = 1; i < j; i++)
-			m = (length[i] > length[m]) ? i : m;
-
 		DEBUG_PRINTF("longest fragment: %ls, index: %zu", arr[m], m);
 
 		/* Will hold the final fragments that we actually use */
-		farr = malloc(4 * sizeof(wchar_t *));
+		farr = malloc(2 * sizeof(wchar_t *));
 		if (!farr) {
 			errcode = REG_ESPACE;
 			goto err;
 		}
 
 		/* Sizes for the final fragments */
-		fsiz = malloc(4 * sizeof(size_t));
+		fsiz = malloc(2 * sizeof(size_t));
 		if (!fsiz) {
 			errcode = REG_ESPACE;
 			goto err;
 		}
 
-		/*
-		 * Only save the longest fragment if match is line-based.
-		 */
-		if (cflags & REG_NEWLINE) {
-			h->type = HEUR_LONGEST;
-			farr[0] = arr[m];
-			arr[m] = NULL;
-			fsiz[0] = length[0];
-			farr[1] = NULL;
-		} else
-		/*
-		 * Otherwise try to save up to three fragments: beginning, longest
-		 * intermediate pattern, ending.  If either the beginning or the
-		 * ending fragment is longer than any intermediate fragments, we will
-		 * not save any intermediate one.  The point here is to always maximize
-		 * the possible shifting when searching in the input.  Measurements
-		 * have shown that the eager approach works best.
-		 */
 
-		DEBUG_PRINTF("strategy: %s", h->type == HEUR_PREFIX_ARRAY ?
-			"HEUR_PREFIX_ARRAY" : "HEUR_ARRAY");
-
-		/* Always start by saving the beginning */
+		/* Save beginning */
 		farr[idx] = arr[0];
-		 DEBUG_PRINTF("fragment %zu: %ls", idx, farr[idx]);
+		DEBUG_PRINTF("fragment %zu: %ls", idx, farr[idx]);
 		arr[0] = NULL;
 		fsiz[idx++] = length[0];
 
-		/*
-		 * If the longest pattern is not the beginning nor the ending,
-		 * save it.
-		 */
-		if ((m != 0) && (m != j - 1)) {
-			farr[idx] = arr[m];
-			DEBUG_PRINTF("fragment %zu: %ls", idx, farr[idx]);
-			fsiz[idx++] = length[m];
-			arr[m] = NULL;
-		}
+		/* Look up maximum length fragment and save it */
+		for (i = 1; i < j; i++)
+			m = (length[i] > length[m]) ? i : m;
+
+		farr[idx] = arr[m];
+		DEBUG_PRINTF("fragment %zu: %ls", idx, farr[idx]);
+		fsiz[idx++] = length[m];
+		arr[m] = NULL;
 
 		/*
-		 * If we have an ending pattern (even if the pattern is
-		 * "open-ended"), save it.
+		 * Line-based case.
 		 */
-		if (j > 1) {
-			farr[idx] = arr[j - 1];
-			DEBUG_PRINTF("fragment %zu: %ls", idx, farr[idx]);
-			fsiz[idx++] = length[j - 1];
-			arr[j - 1] = NULL;
-		}
-
-		farr[idx] = NULL;
+		if (cflags & REG_NEWLINE)
+			h->type = HEUR_LONGEST;
 	}
 
 	/* Once necessary pattern saved, free original array */
