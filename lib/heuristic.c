@@ -344,6 +344,8 @@ ok:
 		for (i = 1; i < j; i++)
 			m = (length[i] > length[m]) ? i : m;
 
+		DEBUG_PRINTF("longest fragment: %ls, index: %zu", arr[m], m);
+
 		/* Will hold the final fragments that we actually use */
 		farr = malloc(4 * sizeof(wchar_t *));
 		if (!farr) {
@@ -377,8 +379,12 @@ ok:
 		 * have shown that the eager approach works best.
 		 */
 
+		DEBUG_PRINTF("strategy: %s", h->type == HEUR_PREFIX_ARRAY ?
+			"HEUR_PREFIX_ARRAY" : "HEUR_ARRAY");
+
 		/* Always start by saving the beginning */
 		farr[idx] = arr[0];
+		 DEBUG_PRINTF("fragment %zu: %ls", idx, farr[idx]);
 		arr[0] = NULL;
 		fsiz[idx++] = length[0];
 
@@ -386,8 +392,9 @@ ok:
 		 * If the longest pattern is not the beginning nor the ending,
 		 * save it.
 		 */
-		if ((m != 1) && (m != j - 1)) {
+		if ((m != 0) && (m != j - 1)) {
 			farr[idx] = arr[m];
+			DEBUG_PRINTF("fragment %zu: %ls", idx, farr[idx]);
 			fsiz[idx++] = length[m];
 			arr[m] = NULL;
 		}
@@ -398,13 +405,12 @@ ok:
 		 */
 		if (j > 1) {
 			farr[idx] = arr[j - 1];
+			DEBUG_PRINTF("fragment %zu: %ls", idx, farr[idx]);
 			fsiz[idx++] = length[j - 1];
 			arr[j - 1] = NULL;
 		}
 
 		farr[idx] = NULL;
-
-		DEBUG_PRINTF("fragments: %ls %ls %ls", farr[0], farr[1], farr[2]);
 	}
 
 	/* Once necessary pattern saved, free original array */
