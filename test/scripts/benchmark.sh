@@ -19,7 +19,7 @@ do_benchmark() {
 	diff=$(($date2-$date1))
 	mins=$(($diff / 60))
 	secs=$(($diff % 60))
-	echo ${1}\;${2}\;${mins}m${secs}s
+	echo ${1} ${2} ${mins}m${secs}s
 }
 
 do_benchmark libc $1
