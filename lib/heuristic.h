@@ -7,9 +7,8 @@
 
 #define MAX_FRAGMENTS 32
 
-#define HEUR_ARRAY		0
-#define HEUR_PREFIX_ARRAY	1
-#define HEUR_LONGEST		2
+#define HEUR_PREFIX		0
+#define HEUR_LONGEST		1
 
 typedef struct {
 	char **arr;

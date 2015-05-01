@@ -61,6 +61,10 @@ do {									\
 			level++;					\
 		else if (regex[i] == ce)				\
 			level--;					\
+		else if (regex[i] == L'.')				\
+			has_dot = true;					\
+		else if (regex[i] == L'\n')				\
+			has_lf = true;					\
 		if (level == 0)						\
 			break;						\
 		i++;							\
@@ -70,9 +74,11 @@ do {									\
 #define PARSE_BRACKETS							\
 do {									\
 	i++;								\
-	if (regex[i] == L'^')						\
+	if (regex[i] == L'^') {						\
+		has_negative_set = true;				\
 		i++;							\
-	if (regex[i] == ']')						\
+	}								\
+	if (regex[i] == L']')						\
 		i++;							\
 									\
 	for (; i < len; i++) {						\
@@ -103,6 +109,14 @@ do {									\
 	continue;							\
 } while (0)
 
+#define STORE(c)							\
+do {									\
+        heur[pos++] = c;						\
+        escaped = false;						\
+        tlen = (tlen == -1) ? -1 : tlen + 1;				\
+        continue;							\
+} while (0)
+
 #define DEC_POS pos = (pos == 0) ? 0 : pos - 1;
 
 /*
@@ -122,6 +136,9 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 	ssize_t tlen = 0;
 	int errcode, pos = 0;
 	bool escaped = false;
+	bool has_dot = false;
+	bool has_lf = false;
+	bool has_negative_set = false;
 
 	DEBUG_PRINT("enter");
 
@@ -276,9 +293,14 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 				if (escaped)
 					STORE_CHAR;
 				else {
+					has_dot = true;
 					tlen = (tlen == -1) ? -1 : tlen + 1;
 					END_SEGMENT(false);
 				}
+				continue;
+			case L'\n':
+				has_lf = true;
+				STORE_CHAR;
 				continue;
 
 			/*
@@ -287,9 +309,13 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 			 * by copying it to the temporary space.
 			 */
 			default:
-				if (escaped)
+				if (escaped) {
+					if (regex[i] == L'n') {
+						has_lf = true;
+						STORE(L'\n');
+					}
 					END_SEGMENT(true);
-				else
+				} else
 					STORE_CHAR;
 				continue;
 			}
@@ -299,6 +325,15 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 		st = len;
  
 end_segment:
+
+		if (st == len && pos == 0) {
+			if (j == 0) {
+				errcode = REG_BADPAT;
+				goto err;
+			}
+			goto ok;
+		}
+
 		/* Continue if we got some variable-length part */
 		if (pos == 0)
 			continue;
@@ -328,47 +363,47 @@ end_segment:
 
 ok:
 	{
-		size_t idx = 0, m = 0;
+		size_t m = 0;
 
 		h->tlen = tlen;
 
-		DEBUG_PRINTF("longest fragment: %ls, index: %zu", arr[m], m);
+		if ((cflags & REG_NEWLINE) ||
+			(!has_dot && !has_lf && !has_negative_set))
+			h->type = HEUR_LONGEST;
+		DEBUG_PRINTF("strategy: %s", h->type == HEUR_LONGEST ?
+			"HEUR_LONGEST" : "HEUR_PREFIX");
 
-		/* Will hold the final fragments that we actually use */
-		farr = malloc(2 * sizeof(wchar_t *));
+
+		/* Will hold the final heuristic that we actually use */
+		farr = malloc(1 * sizeof(wchar_t *));
 		if (!farr) {
 			errcode = REG_ESPACE;
 			goto err;
 		}
 
 		/* Sizes for the final fragments */
-		fsiz = malloc(2 * sizeof(size_t));
+		fsiz = malloc(1 * sizeof(size_t));
 		if (!fsiz) {
 			errcode = REG_ESPACE;
 			goto err;
 		}
 
 
-		/* Save beginning */
-		farr[idx] = arr[0];
-		DEBUG_PRINTF("fragment %zu: %ls", idx, farr[idx]);
-		arr[0] = NULL;
-		fsiz[idx++] = length[0];
+		if (h->type == HEUR_PREFIX) {
+			/* Save beginning */
+			farr[0] = arr[0];
+			fsiz[0] = length[0];
+			arr[0] = NULL;
+			DEBUG_PRINTF("beginning fragment: %ls", farr[0]);
+		} else if (h->type == HEUR_LONGEST) {
+			for (i = 0; i < j; i++)
+				m = (length[i] > length[m]) ? i : m;
 
-		/* Look up maximum length fragment and save it */
-		for (i = 1; i < j; i++)
-			m = (length[i] > length[m]) ? i : m;
-
-		farr[idx] = arr[m];
-		DEBUG_PRINTF("fragment %zu: %ls", idx, farr[idx]);
-		fsiz[idx++] = length[m];
-		arr[m] = NULL;
-
-		/*
-		 * Line-based case.
-		 */
-		if (cflags & REG_NEWLINE)
-			h->type = HEUR_LONGEST;
+			farr[0] = arr[m];
+			fsiz[0] = length[m];
+			arr[m] = NULL;
+			DEBUG_PRINTF("longest fragment: %ls, index: %zu", farr[0], m);
+		}
 	}
 
 	/* Once necessary pattern saved, free original array */
@@ -384,29 +419,26 @@ ok:
 	 * conversion is probably faster than processing the patterns
 	 * again in single-byte form.
 	 */
-	barr = malloc(4 * sizeof(char *));
+	barr = malloc(1 * sizeof(char *));
 	if (!barr) {
 		errcode = REG_ESPACE;
 		goto err;
 	}
 
-	bsiz = malloc(4 * sizeof(size_t));
+	bsiz = malloc(1 * sizeof(size_t));
 	if (!bsiz) {
 		errcode = REG_ESPACE;
 		goto err;
 	}
 
-	for (i = 0; farr[i] != NULL; i++) {
-		bsiz[i] = wcstombs(NULL, farr[i], 0);
-		barr[i] = malloc(bsiz[i] + 1);
-		if (!barr[i]) {
-			errcode = REG_ESPACE;
-			goto err;
-		}
-		wcstombs(barr[i], farr[i], bsiz[i]);
-		barr[i][bsiz[i]] = '\0';
-      	}
-	barr[i] = NULL;
+	bsiz[0] = wcstombs(NULL, farr[0], 0);
+	barr[0] = malloc(bsiz[0] + 1);
+	if (!barr[0]) {
+		errcode = REG_ESPACE;
+		goto err;
+	}
+	wcstombs(barr[0], farr[0], bsiz[0]);
+	barr[0][bsiz[0]] = '\0';
 
 	h->warr = farr;
 	h->wsiz = fsiz;
@@ -416,34 +448,31 @@ ok:
 	/*
 	 * Compile all the useful fragments for actual matching.
 	 */
-	h->heurs = malloc(4 * sizeof(fastmatch_t *));
+	h->heurs = malloc(1 * sizeof(fastmatch_t *));
 	if (!h->heurs) {
 		errcode = REG_ESPACE;
 		goto err;
 	}
-	for (i = 0; farr[i] != NULL; i++) {
-		h->heurs[i] = malloc(sizeof(fastmatch_t));
-		if (!h->heurs[i]) {
-			errcode = REG_ESPACE;
-			goto err;
-		}
-		errcode = frec_proc_literal(h->heurs[i], farr[i], fsiz[i],
-			barr[i], bsiz[i], 0);
-		if (errcode != REG_OK) {
-			errcode = REG_BADPAT;
-			goto err;
-		}
+
+	h->heurs[0] = malloc(sizeof(fastmatch_t));
+	if (!h->heurs[0]) {
+		errcode = REG_ESPACE;
+		goto err;
+	}
+	errcode = frec_proc_literal(h->heurs[0], farr[0], fsiz[0],
+		barr[0], bsiz[0], 0);
+	if (errcode != REG_OK) {
+		errcode = REG_BADPAT;
+		goto err;
 	}
 
-	h->heurs[i] = NULL;
 	errcode = REG_OK;
 	goto finish;
 
 err:
 	if (barr) {
-		for (i = 0; i < 4; i++)
-			if (barr[i])
-				free(barr[i]);
+		if (barr[0])
+			free(barr[0]);
 		free(barr);
 	}
 
@@ -451,9 +480,8 @@ err:
 		free(bsiz);
 
 	if (farr) {
-		for (i = 0; i < j; i++)
-			if (farr[i])
-				free(farr[i]);
+		if (farr[0])
+			free(farr[0]);
 		free(farr);
 	}
 
@@ -461,8 +489,8 @@ err:
 		free(fsiz);
 
 	if (h->heurs) {
-		for (i = 0; h->heurs[i] != NULL; i++)
-			frec_free_fast(h->heurs[i]);
+		if (h->heurs[0] != NULL)
+			frec_free_fast(h->heurs[0]);
 		free(h->heurs);
 	}
 finish:
