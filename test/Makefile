@@ -4,7 +4,13 @@ SUBDIR=	sgrep \
 	sgrep-libc \
 	sgrep-tre
 
-TEST_PATTERNS=	'printf[^)]*)'
+TEST_PATTERNS=	'printf[^)]*)' \
+		'printf[^)]*%ld' \
+		'printf[^)]*%ld[^)]*);' \
+		'abcdefghij.' \
+		'abcdefghij.klmnopqrstuv' \
+		'abcdefghij.klmnopqrstuv.wxyz' \
+		'[.a-z]*@gmail\.com'
 
 work/hugefile:
 	@mkdir -p work
