@@ -247,15 +247,15 @@ main(int argc, char *argv[])
 			} else {
 				c++;
 #ifdef REG_MULTI
-				printf("(%d %d)", pmatch.m.rm_so, pmatch.m.rm_eo);
+				printf("(%d %d)\n", pmatch.m.rm_so, pmatch.m.rm_eo);
 				so = pmatch.m.rm_eo;
 #endif
 #ifdef REG_POSIX
-				printf("(%ld %ld)", pmatch.rm_so, pmatch.rm_eo);
+				printf("(%ld %ld)\n", pmatch.rm_so, pmatch.rm_eo);
 				so = pmatch.rm_eo;
 #endif
 #ifdef REG_TRE
-				printf("(%ld %ld)", so + pmatch.rm_so, so + pmatch.rm_eo);
+				printf("(%ld %ld)\n", so + pmatch.rm_so, so + pmatch.rm_eo);
 				so += pmatch.rm_eo;
 #endif
 			}
