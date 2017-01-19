@@ -1,5 +1,5 @@
 /*-
- * Copyright (C) 2011, 2015 Gabor Kovesdan <gabor@FreeBSD.org>
+ * Copyright (C) 2011, 2015, 2017 Gabor Kovesdan <gabor@FreeBSD.org>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -94,6 +94,8 @@ do {									\
  */
 #define END_SEGMENT(varlen)						\
 do {									\
+	if (tlen == 0)							\
+		starts_with_literal = false;				\
 	if (varlen)							\
 		tlen = -1;						\
 	st = i + 1;							\
@@ -139,6 +141,7 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 	bool has_dot = false;
 	bool has_lf = false;
 	bool has_negative_set = false;
+	bool starts_with_literal = true;
 
 	DEBUG_PRINT("enter");
 
@@ -370,6 +373,10 @@ ok:
 		if ((cflags & REG_NEWLINE) ||
 			(!has_dot && !has_lf && !has_negative_set))
 			h->type = HEUR_LONGEST;
+		else if (!starts_with_literal) {
+			errcode = REG_BADPAT;
+			goto err;
+		}
 		DEBUG_PRINTF("strategy: %s", h->type == HEUR_LONGEST ?
 			"HEUR_LONGEST" : "HEUR_PREFIX");
 
