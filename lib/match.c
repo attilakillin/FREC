@@ -320,24 +320,44 @@ finish1:
 			if (ret != REG_OK)
 				goto finish2;
 
-			/* Need to start from here if this fails. */
+			/*
+			 * First subcase; possibly matching pattern is
+			 * fixed-length.
+			 */
+			if (preg->patterns[rpm.p].heur->tlen != -1) {
+				size_t rem = preg->patterns[rpm.p].heur->tlen
+				    - (rpm.m.rm_eo - rpm.m.rm_so);
+
+				int so = st + rpm.m.rm_so <= rem ? 0 :
+				    st + rpm.m.rm_so - rem;
+				int eo = st + rpm.m.rm_eo + rem >= len ? len :
+				    st + rpm.m.rm_eo + rem;
+
+				ret = frec_match(&preg->patterns[rpm.p], INPUT(so), so - eo,
+				    type, need_offsets ? nmatch : 0, pm, eflags);
+			/*
+			 * Second subcase; using line boundaries.
+			 */
+			} else {
+				/* Look for the beginning of the line. */
+				for (bl = st; bl > 0; bl--)
+					if ((type == STR_WIDE) ? (str_wide[bl] == L'\n') :
+					    (str_byte[bl] == '\n'))
+						break;
+
+				/* Look for the end of the line. */
+				for (el = st; el < len; el++)
+					if ((type == STR_WIDE) ? (str_wide[el] == L'\n') :
+					    (str_byte[el] == '\n'))
+						break;
+
+				/* Try to match the pattern on the line. */
+				ret = frec_match(&preg->patterns[rpm.p], INPUT(bl), el - bl,
+				    type, need_offsets ? nmatch : 0, pm, eflags);
+			}
+
+			/* Need to start from here if matching failed. */
 			st += rpm.m.rm_so + 1;
-
-			/* Look for the beginning of the line. */
-			for (bl = st; bl > 0; bl--)
-				if ((type == STR_WIDE) ? (str_wide[bl] == L'\n') :
-				    (str_byte[bl] == '\n'))
-					break;
-
-			/* Look for the end of the line. */
-			for (el = st; el < len; el++)
-				if ((type == STR_WIDE) ? (str_wide[el] == L'\n') :
-				    (str_byte[el] == '\n'))
-					break;
-
-			/* Try to match the pattern on the line. */
-			ret = frec_match(&preg->patterns[rpm.p], INPUT(bl), el - bl,
-			    type, need_offsets ? nmatch : 0, pm, eflags);
 
 			/* Evaluate result. t*/
 			if (ret == REG_NOMATCH)
