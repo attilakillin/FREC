@@ -216,11 +216,9 @@ frec_mmatch(const void *str, size_t len, int type, size_t nmatch,
     (const void *)&str_byte[pos])
 
 	/*
-	 * Worst case: at least one pattern does not have a literal
-	 * prefix so the Wu-Manber algorithm cannot be used to speed
-	 * up the match.  There is no trivial best solution either,
-	 * so just try matching for each of the patterns and return
-	 * the earliest.
+	 * MHEUR_NONE: worst case; no way to speed up the match.
+	 * There is no trivial best solution either, so just try
+	 * matching for each of the patterns and return the earliest.
 	 */
 	if (preg->type == MHEUR_NONE) {
 		frec_match_t **pm = NULL;
@@ -297,8 +295,8 @@ finish1:
 	}
 
 	/*
-	 * REG_NEWLINE: only searching the longest fragment of each
-	 * pattern and then isolating the line and calling the
+	 * MHEUR_LONGEST: only searching the longest fragment of each
+	 * pattern and then isolating the context and calling the
 	 * automaton.
 	 */
 	else if (preg->type == MHEUR_LONGEST) {
@@ -365,8 +363,8 @@ finish2:
 	}
 
 	/*
-	 * Literal case.  It is enough to search with Wu-Manber and immediately
-	 * return the match.
+	 * MHEUR_LITERAL: literal case; it is enough to search with Wu-Manber
+	 * and immediately return the match.
 	 */
 	else if (preg->type == MHEUR_LITERAL) {
 
@@ -377,7 +375,7 @@ finish2:
 	}
 
 	/*
-	 * Single pattern.  Call single matcher.
+	 * MHEUR_SINGLE: single pattern; call single matcher.
 	 */
 	else if (preg->type == MHEUR_SINGLE)
 		return frec_match(&preg->patterns[0], str, len, type,
