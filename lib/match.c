@@ -247,7 +247,7 @@ frec_mmatch(const void *str, size_t len, int type, size_t nmatch,
 				need_offsets ? nmatch : 0, pm[i], eflags);
 
 			/* Mark if there is no match for the pattern. */
-				if (!need_offsets) {
+			if (!need_offsets) {
 				if (ret == REG_OK)
 					return REG_OK;
 			} else if (ret == REG_NOMATCH)
