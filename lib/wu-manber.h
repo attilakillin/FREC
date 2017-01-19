@@ -9,10 +9,9 @@
 #define WM_MAXPAT 64
 
 #define MHEUR_NONE 0
-#define MHEUR_PREFIX 1
-#define MHEUR_LONGEST 2
-#define MHEUR_LITERAL 3
-#define MHEUR_SINGLE 4
+#define MHEUR_SINGLE 1
+#define MHEUR_LITERAL 2
+#define MHEUR_LONGEST 3
 
 typedef struct {
 	int cflags;

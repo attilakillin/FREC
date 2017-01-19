@@ -1,5 +1,5 @@
 /*-
- * Copyright (C) 2012 Gabor Kovesdan <gabor@FreeBSD.org>
+ * Copyright (C) 2012, 2017 Gabor Kovesdan <gabor@FreeBSD.org>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -57,8 +57,8 @@ frec_compile(frec_t *preg, const wchar_t *wregex, size_t wn,
 	}
 
 	/*
-	 * Check if we can cheat with a fixed string algorithm
-	 * if the pattern is long enough.
+	 * Check if the pattern is literal even though REG_LITERAL
+	 * was not set.
 	 */
 	ret = frec_compile_bm(preg, wregex, wn, regex, n, cflags);
 
@@ -217,8 +217,8 @@ frec_mcompile(mregex_t *preg, size_t nr, const wchar_t **wregex,
 		DEBUG_PRINT("strategy MHEUR_LONGEST");
 		preg->type = MHEUR_LONGEST;
 	} else {
-		DEBUG_PRINT("strategy MHEUR_PREFIX");
-		preg->type = MHEUR_PREFIX;
+		ret = REG_BADPAT;
+		goto err;
 	}
 
 	goto finish;
