@@ -273,12 +273,12 @@ frec_mmatch(const void *str, size_t len, int type, size_t nmatch,
 
 			for (i = first + 1; i < preg->k; i++)
 				if ((pm[i][0].m.rm_so < pm[first][0].m.rm_so) ||
-				    (pm[i][0].m.rm_eo > pm[first][0].m.rm_eo)) {
+				    ((pm[i][0].m.rm_so == pm[first][0].m.rm_so) && (pm[i][0].m.rm_eo > pm[first][0].m.rm_eo))) {
 					first = i;
 				}
 		}
 
-		/* Fill int the offsets before returning. */
+		/* Fill in the offsets before returning. */
 		for (i = 0; need_offsets && (i < nmatch); i++) {
 			pmatch[i].m.rm_so = pm[first][i].m.rm_so;
 			pmatch[i].m.rm_eo = pm[first][i].m.rm_eo;
