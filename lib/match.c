@@ -1,5 +1,5 @@
 /*-
- * Copyright (C) 2012, 2015 Gabor Kovesdan <gabor@FreeBSD.org>
+ * Copyright (C) 2012, 2015, 2017 Gabor Kovesdan <gabor@FreeBSD.org>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -383,50 +383,5 @@ finish2:
 		return frec_match(&preg->patterns[0], str, len, type,
 		    nmatch, pmatch, eflags);
 
-	/*
-	 * General case. Look for the beginning of any of the patterns with the
-	 * Wu-Manber algorithm and try to match from there with the automaton.
-	 */
-	else {
-		frec_match_t *pm = NULL;
-		frec_match_t rpm;
-		size_t st = 0;
-
-		DEBUG_PRINT("matching open-ended pattern set");
-
-		/* Alloc frec_match_t structures for results */
-		if (need_offsets) {
-			pm = malloc(nmatch * sizeof(frec_match_t *));
-			if (!pm)
-				return REG_ESPACE;
-		}
-
-		while (st < len) {
-			ret = frec_wmexec(preg->searchdata, INPUT(st),
-			    len, type, nmatch, &rpm, eflags);
-			if (ret != REG_OK)
-				return ret;
-
-			ret = frec_match(&preg->patterns[rpm.p], INPUT(rpm.m.rm_so),
-			    len - rpm.m.rm_so, type, need_offsets ? nmatch : 0,
-			    pm, eflags);
-			if ((ret == REG_OK) && (pm[0].m.rm_so == 0)) {
-				if (need_offsets)
-					for (size_t i = 0; i < nmatch; i++) {
-						pm[i].m.rm_so += st;
-						pm[i].m.rm_eo += st;
-						pm[i].p = rpm.p;
-					}
-				goto finish3;
-			} else if ((ret != REG_NOMATCH) || (ret != REG_OK))
-				goto finish3;
-			st += rpm.m.rm_so + 1;
-		}
-
-finish3:
-		if (pm)
-			free(pm);
-		return ret;
-	}
-
+	return ret;
 }
