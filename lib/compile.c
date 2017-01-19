@@ -161,21 +161,37 @@ frec_mcompile(mregex_t *preg, size_t nr, const wchar_t **wregex,
 		}
 	}
 
+	/* Use single pattern matching in case of one pattern */
 	if (nr == 1) {
 		DEBUG_PRINT("strategy MHEUR_SINGLE");
 		preg->type = MHEUR_SINGLE;
 		goto finish;
 	}
 
-	/* If not literal, check if any of them have fixed-length prefix. */
-	if (!(cflags & REG_LITERAL))
+
+	/* Set the specific type of matching. */
+	if (cflags & REG_LITERAL) {
+		DEBUG_PRINT("strategy MHEUR_LITERAL");
+		preg->type = MHEUR_LITERAL;
+        } else if (cflags & REG_NEWLINE) {
+		DEBUG_PRINT("strategy MHEUR_LONGEST");
+                preg->type = MHEUR_LONGEST;
+        }
+	else {
+		/* If not literal, check if all patterns can be matched with
+		  the HEUR_LONGEST strategy. Otherwise, it is not possible
+		  to speed up multiple pattern matching. */
+		preg->type = MHEUR_LONGEST;
 		for (size_t i = 0; i < nr; i++)
 			if ((preg->patterns[i].heur == NULL) ||
-			    (((heur_t *)(preg->patterns[i].heur))->arr[0] == NULL)) {
+			    (((heur_t *)(preg->patterns[i].heur))->type != HEUR_LONGEST)) {
 				DEBUG_PRINT("strategy MHEUR_NONE");
 				preg->type = MHEUR_NONE;
 				goto finish;
 			}
+		if (preg->type == MHEUR_LONGEST)
+			DEBUG_PRINT("strategy MHEUR_LONGEST");
+	}
 
 	/*
 	 * Set frag and siz to point to the fragments to compile and
@@ -208,18 +224,6 @@ frec_mcompile(mregex_t *preg, size_t nr, const wchar_t **wregex,
 		goto err;
 	wm->cflags = cflags;
 	preg->searchdata = wm;
-
-	/* Set the specific type of matching. */
-	if (cflags & REG_LITERAL) {
-		DEBUG_PRINT("strategy MHEUR_LITERAL");
-		preg->type = MHEUR_LITERAL;
-	} else if (cflags & REG_NEWLINE) {
-		DEBUG_PRINT("strategy MHEUR_LONGEST");
-		preg->type = MHEUR_LONGEST;
-	} else {
-		ret = REG_BADPAT;
-		goto err;
-	}
 
 	goto finish;
 
