@@ -9,7 +9,6 @@
 typedef struct {
 	size_t k;		/* Number of patterns */
 	frec_t *patterns;	/* regex_t structure for each pattern */
-	size_t mfrag;		/* XXX (private) Number of fragments */
 	int type;		/* XXX (private) Matching type */
 	int err;		/* XXX (private) Which pattern failed */
 	void *searchdata;	/* Wu-Manber internal data */
