@@ -41,17 +41,16 @@ static int	fastcmp(const fastmatch_t *fg, const void *data,
 /*
  * Clean up if pattern compilation fails.
  */
-#define FAIL_COMP(errcode)						\
-do {									\
-	if (fg->pattern)						\
-		free(fg->pattern);					\
-	if (fg->wpattern)						\
-		free(fg->wpattern);					\
-	if (fg->qsBc_table)						\
-		hashtable_free(fg->qsBc_table);				\
-	fg = NULL;							\
-	return (errcode);						\
-} while(0);
+inline static void fail_comp(fastmatch_t **fg) {
+
+	if ((*fg)->pattern)
+		free((*fg)->pattern);
+	if ((*fg)->wpattern)
+		free((*fg)->wpattern);
+	if ((*fg)->qsBc_table)
+		hashtable_free((*fg)->qsBc_table);
+	*fg = NULL;
+}
 
 /*
  * Skips n characters in the input string and assigns the start
@@ -60,13 +59,13 @@ do {									\
  * so we can handle MB strings as byte sequences just like
  * SB strings.
  */
-#define SKIP_CHARS(n)							\
-switch (type) {								\
-case STR_WIDE:								\
-	startptr = str_wide + n;					\
-	break;								\
-default:								\
-	startptr = str_byte + n;					\
+inline static void skip_chars(const void **startptr, const wchar_t *str_wide,
+    const char *str_byte, int type, size_t n) {
+
+	if (type == STR_WIDE)
+		*startptr = str_wide + n;
+	else
+		*startptr = str_byte + n;
 }
 
 /*
@@ -74,20 +73,20 @@ default:								\
  * it in fg->pattern. Sets fg->len to the byte length of the
  * converted string.
  */
-#define STORE_MBS_PAT							\
-do {									\
-	size_t siz;							\
-									\
-	siz = wcstombs(NULL, fg->wpattern, 0);				\
-	if (siz == (size_t)-1)						\
-		return (REG_BADPAT);					\
-	fg->len = siz;							\
-	fg->pattern = malloc(siz + 1);					\
-	if (fg->pattern == NULL)					\
-		return (REG_ESPACE);					\
-	wcstombs(fg->pattern, fg->wpattern, siz);			\
-	fg->pattern[siz] = '\0';					\
-} while (0);
+inline static int store_mbs_pattern(fastmatch_t *fg) {
+	size_t siz;
+
+	siz = wcstombs(NULL, fg->wpattern, 0);
+	if (siz == (size_t)-1)
+		return (REG_BADPAT);
+	fg->len = siz;
+	fg->pattern = malloc(siz + 1);
+	if (fg->pattern == NULL)
+		return (REG_ESPACE);
+	wcstombs(fg->pattern, fg->wpattern, siz);
+	fg->pattern[siz] = '\0';
+	return (REG_OK);
+}
 
 #define IS_OUT_OF_BOUNDS						\
 ((type == STR_WIDE) ? ((j + fg->wlen) > len) : ((j + fg->len) > len))
@@ -144,17 +143,19 @@ CHECKBOUNDS;								\
 	j = j + shift;							\
 }
 
-#define FILL_QSBC							\
-for (unsigned int i = 0; i <= UCHAR_MAX; i++)				\
-	fg->qsBc[i] = fg->len;						\
-for (unsigned int i = 1; i < fg->len; i++) {				\
-	fg->qsBc[(unsigned char)fg->pattern[i]] = fg->len - i;		\
-	if (fg->icase) {						\
-		char c = islower((unsigned char)fg->pattern[i]) ?	\
-		    toupper((unsigned char)fg->pattern[i]) :		\
-		    tolower((unsigned char)fg->pattern[i]);		\
-		fg->qsBc[(unsigned char)c] = fg->len - i;		\
-	}								\
+inline static void fill_qsbc(fastmatch_t *fg) {
+
+	for (unsigned int i = 0; i <= UCHAR_MAX; i++)
+		fg->qsBc[i] = fg->len;
+	for (unsigned int i = 1; i < fg->len; i++) {
+		fg->qsBc[(unsigned char)fg->pattern[i]] = fg->len - i;
+		if (fg->icase) {
+			char c = islower((unsigned char)fg->pattern[i]) ?
+			    toupper((unsigned char)fg->pattern[i]) :
+			    tolower((unsigned char)fg->pattern[i]);
+			fg->qsBc[(unsigned char)c] = fg->len - i;
+		}
+	}
 }
 
 /*
@@ -166,29 +167,37 @@ for (unsigned int i = 1; i < fg->len; i++) {				\
  * in the pattern, so we can store them in a hashtable and store a
  * default shift value for the rest.
  */
+inline static int fill_qsbc_wide(fastmatch_t *fg) {
 
-#define FILL_QSBC_WIDE							\
-fg->defBc = fg->wlen;							\
-									\
-/* Preprocess pattern. */						\
-fg->qsBc_table = hashtable_init(fg->wlen * (fg->icase ? 8 : 4),		\
-    sizeof(wchar_t), sizeof(int));					\
-if (!fg->qsBc_table)							\
-	FAIL_COMP(REG_ESPACE);						\
-for (unsigned int i = 1; i < fg->wlen; i++) {				\
-	int k = fg->wlen - i;						\
-	int r;								\
-									\
-	r = hashtable_put(fg->qsBc_table, &fg->wpattern[i], &k);	\
-	if ((r == HASH_FAIL) || (r == HASH_FULL))			\
-		FAIL_COMP(REG_ESPACE);					\
-	if (fg->icase) {						\
-		wchar_t wc = iswlower(fg->wpattern[i]) ?		\
-		    towupper(fg->wpattern[i]) : towlower(fg->wpattern[i]);	\
-		r = hashtable_put(fg->qsBc_table, &wc, &k);		\
-		if ((r == HASH_FAIL) || (r == HASH_FULL))		\
-		    FAIL_COMP(REG_ESPACE);				\
-	}								\
+	fg->defBc = fg->wlen;
+
+	/* Preprocess pattern. */
+	fg->qsBc_table = hashtable_init(fg->wlen * (fg->icase ? 8 : 4),
+	    sizeof(wchar_t), sizeof(int));
+	if (!fg->qsBc_table) {
+		fail_comp(&fg);
+		return (REG_ESPACE);
+	}
+	for (unsigned int i = 1; i < fg->wlen; i++) {
+		int k = fg->wlen - i;
+		int r;
+
+		r = hashtable_put(fg->qsBc_table, &fg->wpattern[i], &k);
+		if ((r == HASH_FAIL) || (r == HASH_FULL)) {
+			fail_comp(&fg);
+			return (REG_ESPACE);
+		}
+		if (fg->icase) {
+			wchar_t wc = iswlower(fg->wpattern[i]) ?
+			    towupper(fg->wpattern[i]) : towlower(fg->wpattern[i]);
+			r = hashtable_put(fg->qsBc_table, &wc, &k);
+			if ((r == HASH_FAIL) || (r == HASH_FULL)) {
+				fail_comp(&fg);
+				return (REG_ESPACE);
+			}
+		}
+	}
+	return (REG_OK);
 }
 
 /*
@@ -302,40 +311,50 @@ dst[dstlen] = L'\0';
 /*
  * Initializes pattern compiling.
  */
-#define INIT_COMP							\
-/* Initialize. */							\
-memset(fg, 0, sizeof(*fg));						\
-fg->icase = (cflags & REG_ICASE);					\
-fg->word = (cflags & REG_WORD);						\
-fg->newline = (cflags & REG_NEWLINE);					\
-fg->nosub = (cflags & REG_NOSUB);					\
-									\
-/* Cannot handle REG_ICASE with MB string */				\
-if (fg->icase && (MB_CUR_MAX > 1) && n > 0)				\
-	return (REG_BADPAT);
+inline static int init_comp(fastmatch_t **fg, size_t n, int cflags) {
+
+	/* Initialize. */
+	memset(*fg, 0, sizeof(**fg));
+	(*fg)->icase = (cflags & REG_ICASE);
+	(*fg)->word = (cflags & REG_WORD);
+	(*fg)->newline = (cflags & REG_NEWLINE);
+	(*fg)->nosub = (cflags & REG_NOSUB);
+
+	/* Cannot handle REG_ICASE with MB string */
+	if ((*fg)->icase && (MB_CUR_MAX > 1) && n > 0)
+		return (REG_BADPAT);
+	return (REG_OK);
+}
 
 /*
  * Checks whether we have a 0-length pattern that will match
  * anything. If literal is set to false, the EOL anchor is also
  * taken into account.
  */
-#define CHECK_MATCHALL(literal)						\
-if (!literal && n == 1 && pat[0] == L'$') {				\
-	n--;								\
-	fg->eol = true;							\
-}									\
-									\
-if (n == 0) {								\
-	fg->matchall = true;						\
-	fg->pattern = malloc(sizeof(char));				\
-	if (!fg->pattern)						\
-		FAIL_COMP(REG_ESPACE);					\
-	fg->pattern[0] = '\0';						\
-	fg->wpattern = malloc(sizeof(wchar_t));				\
-	if (!fg->wpattern)						\
-		FAIL_COMP(REG_ESPACE);					\
-	fg->wpattern[0] = L'\0';					\
-	return (REG_OK);						\
+#define REG_MATCHALL -1
+inline static int check_matchall(fastmatch_t *fg, const char *pat, size_t *n, bool literal) {
+	if (!literal && *n == 1 && pat[0] == L'$') {
+		(*n)--;
+		fg->eol = true;
+	}
+
+	if (*n == 0) {
+		fg->matchall = true;
+		fg->pattern = malloc(sizeof(char));
+		if (!fg->pattern) {
+			fail_comp(&fg);
+			return (REG_ESPACE);
+		}
+		fg->pattern[0] = '\0';
+		fg->wpattern = malloc(sizeof(wchar_t));
+		if (!fg->wpattern) {
+			fail_comp(&fg);
+			return (REG_ESPACE);
+		}
+		fg->wpattern[0] = L'\0';
+		return (REG_MATCHALL);
+	}
+	return (REG_OK);
 }
 
 /*
@@ -348,8 +367,14 @@ frec_proc_literal(fastmatch_t *fg, const wchar_t *wpat, size_t wn,
 
 	DEBUG_PRINT("enter");
 
-	INIT_COMP;
-	CHECK_MATCHALL(true);
+	int ret = init_comp(&fg, n, cflags);
+	if (ret != REG_OK)
+		return (ret);
+	ret = check_matchall(fg, pat, &n, true);
+	if (ret == REG_MATCHALL)
+		return (REG_OK);
+	else if (ret != REG_OK)
+		return (ret);
 
 	/* Cannot handle word boundaries with MB string */
 	if (fg->word && (MB_CUR_MAX > 1)) {
@@ -361,9 +386,11 @@ frec_proc_literal(fastmatch_t *fg, const wchar_t *wpat, size_t wn,
 	SAVE_PATTERN(pat, n, fg->pattern, fg->len, char);
 
 
-	FILL_QSBC;
+	fill_qsbc(fg);
 	FILL_BMGS;
-	FILL_QSBC_WIDE;
+	ret = fill_qsbc_wide(fg);
+	if (ret != REG_OK)
+		return (ret);
 	FILL_BMGS_WIDE;
 
 	DEBUG_PRINTF("compiled pattern %s", pat);
@@ -384,7 +411,9 @@ frec_proc_fast(fastmatch_t *fg, const wchar_t *wpat, size_t wn,
 
 	DEBUG_PRINT("enter");
 
-	INIT_COMP;
+	int ret = init_comp(&fg, n, cflags);
+	if (ret != REG_OK)
+		return (ret);
 
 	/* Remove beginning-of-line character ('^'). */
 	if (wpat[0] == L'^') {
@@ -393,7 +422,11 @@ frec_proc_fast(fastmatch_t *fg, const wchar_t *wpat, size_t wn,
 		wpat++;
 	}
 
-	CHECK_MATCHALL(false);
+	ret = check_matchall(fg, pat, &n, false);
+	if (ret == REG_MATCHALL)
+		return (REG_OK);
+	else if (ret != REG_OK)
+		return (ret);
 
 	/* Handle word-boundary matching when GNU extensions are enabled */
 	if ((cflags & REG_GNU) && (wn >= 14) &&
@@ -510,13 +543,18 @@ badpat:
 	SAVE_PATTERN(tmp, pos, fg->wpattern, fg->wlen, wchar_t);
 
 	/* Convert back to MBS instead of processing again */
-	STORE_MBS_PAT;
+	// XXX: memleak!
+	ret = store_mbs_pattern(fg);
+	if (ret != REG_OK)
+		return (ret);
 
 	free(tmp);
 
-	FILL_QSBC;
+	fill_qsbc(fg);
 	FILL_BMGS;
-	FILL_QSBC_WIDE;
+	ret = fill_qsbc_wide(fg);
+	if (ret != REG_OK)
+		return ret;
 	FILL_BMGS_WIDE;
 
 	return (REG_OK);
@@ -639,7 +677,7 @@ frec_match_fast(const fastmatch_t *fg, const void *data, size_t len,
 		    (type == STR_WIDE ? (len != fg->wlen) : (len != fg->len)))) {
 			/* Determine where in data to start search at. */
 			j = fg->eol ? len - (type == STR_WIDE ? fg->wlen : fg->len) : 0;
-			SKIP_CHARS(j);
+			skip_chars(&startptr, str_wide, str_byte, type, j);
 			mismatch = fastcmp(fg, startptr, type);
 			if (mismatch == REG_OK) {
 				if (!fg->nosub && nmatch >= 1) {
@@ -653,7 +691,7 @@ frec_match_fast(const fastmatch_t *fg, const void *data, size_t len,
 	} else {
 		/* Quick Search / Turbo Boyer-Moore algorithm. */
 		do {
-			SKIP_CHARS(j);
+			skip_chars(&startptr, str_wide, str_byte, type, j);
 			mismatch = fastcmp(fg, startptr, type);
 			if (mismatch == REG_OK) {
 				if (fg->bol)
