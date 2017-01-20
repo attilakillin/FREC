@@ -52,74 +52,75 @@
  * The parameters are the opening (oe) and closing elements (ce).
  * Can handle nested bracket expressions.
  */
-#define PARSE_UNIT(oe, ce)						\
-do {									\
-	int level = 0;							\
-									\
-	while (i < len) {						\
-		if (regex[i] == oe)					\
-			level++;					\
-		else if (regex[i] == ce)				\
-			level--;					\
-		else if (regex[i] == L'.')				\
-			has_dot = true;					\
-		else if (regex[i] == L'\n')				\
-			has_lf = true;					\
-		if (level == 0)						\
-			break;						\
-		i++;							\
-	}								\
-} while (0)
+inline static void parse_unit(const wchar_t *regex, size_t len, size_t *i,
+    wchar_t oe, wchar_t ce, bool *has_dot, bool *has_lf) {
+	int level = 0;
 
-#define PARSE_BRACKETS							\
-do {									\
-	i++;								\
-	if (regex[i] == L'^') {						\
-		has_negative_set = true;				\
-		i++;							\
-	}								\
-	if (regex[i] == L']')						\
-		i++;							\
-									\
-	for (; i < len; i++) {						\
-		if (regex[i] == L'[')					\
-			return (REG_BADPAT);				\
-		if (regex[i] == L']')					\
-			break;						\
-	}								\
-} while (0)
+	while (*i < len) {
+		if (regex[*i] == oe)
+			level++;
+		else if (regex[*i] == ce)
+			level--;
+		else if (regex[*i] == L'.')
+			*has_dot = true;
+		else if (regex[*i] == L'\n')
+			*has_lf = true;
+		if (level == 0)
+			break;
+		(*i)++;
+	}
+}
+
+inline static int parse_brackets(const wchar_t *regex, size_t len, size_t *i,
+    bool *has_negative_set) {
+	(*i)++;
+	if (regex[*i] == L'^') {
+		*has_negative_set = true;
+		(*i)++;
+	}
+	if (regex[*i] == L']')
+		(*i)++;
+
+	for (; *i < len; (*i)++) {
+		if (regex[*i] == L'[')
+			return (REG_BADPAT);
+		if (regex[*i] == L']')
+			break;
+	}
+	return (REG_OK);
+}
 
 /*
  * Finishes a segment (fixed-length text fragment).
  */
-#define END_SEGMENT(varlen)						\
-do {									\
-	if (tlen == 0)							\
-		starts_with_literal = false;				\
-	if (varlen)							\
-		tlen = -1;						\
-	st = i + 1;							\
-	escaped = false;						\
-	goto end_segment;						\
-} while (0)
+inline static void end_segment(bool varlen, size_t i, size_t *st,
+    bool *escaped, ssize_t *tlen, bool *starts_with_literal) {
+	if (*tlen == 0)
+		*starts_with_literal = false;
+	if (varlen)
+		*tlen = -1;
+	*st = i + 1;
+	escaped = false;
+}
 
-#define STORE_CHAR							\
-do {									\
-	heur[pos++] = regex[i];						\
-	escaped = false;						\
-	tlen = (tlen == -1) ? -1 : tlen + 1;				\
-	continue;							\
-} while (0)
+inline static void store_char(wchar_t *heur, int *pos, const wchar_t *regex,
+    size_t i, ssize_t *tlen, bool *escaped) {
+	heur[(*pos)++] = regex[i];
+	*escaped = false;
+	*tlen = (*tlen == -1) ? -1 : *tlen + 1;
+}
 
-#define STORE(c)							\
-do {									\
-        heur[pos++] = c;						\
-        escaped = false;						\
-        tlen = (tlen == -1) ? -1 : tlen + 1;				\
-        continue;							\
-} while (0)
+inline static void store(wchar_t *heur, int *pos, wchar_t c,
+    ssize_t *tlen, bool *escaped) {
+        heur[(*pos)++] = c;
+        *escaped = false;
+        *tlen = (*tlen == -1) ? -1 : *tlen + 1;
+}
 
-#define DEC_POS pos = (pos == 0) ? 0 : pos - 1;
+inline static void dec_pos(int *pos) {
+
+	*pos = (*pos == 0) ? 0 : *pos - 1;
+}
 
 /*
  * Parses a regular expression and constructs a heuristic in heur_t and
@@ -178,11 +179,14 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 			 * bracket is escaped.
 			 */
 			case L'[':
-				if (escaped)
-					STORE_CHAR;
-				else {
-					PARSE_BRACKETS;
-					END_SEGMENT(true);
+				if (escaped) {
+					store_char(heur, &pos, regex, i, &tlen, &escaped);
+					continue;
+				} else {
+					if (parse_brackets(regex, len, &i, &has_negative_set) == REG_BADPAT)
+						return REG_BADPAT;
+					end_segment(true, i, &st, &escaped, &tlen, &starts_with_literal);
+					goto end_segment;
 				}
 				continue;
 
@@ -192,17 +196,23 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 			 * character.
 			 */
 			case L'{':
-				if (escaped && (i == 1))
-					STORE_CHAR;
-				else if (i == 0)
-					STORE_CHAR;
+				if (escaped && (i == 1)) {
+					store_char(heur, &pos, regex, i, &tlen, &escaped);
+					continue;
+				} else if (i == 0) {
+					store_char(heur, &pos, regex, i, &tlen, &escaped);
+					continue;
+				}
 
-				PARSE_UNIT('{', '}');
+				parse_unit(regex, len, &i, L'{', L'}', &has_dot, &has_lf);
 				if (escaped ^ (cflags & REG_EXTENDED)) {
-					DEC_POS;
-					END_SEGMENT(true);
-				} else
-					STORE_CHAR;
+					dec_pos(&pos);
+					end_segment(true, i, &st, &escaped, &tlen, &starts_with_literal);
+					goto end_segment;
+				} else {
+					store_char(heur, &pos, regex, i, &tlen, &escaped);
+					continue;
+				}
 				continue;
 
 			/*
@@ -211,10 +221,13 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 			 */
 			case L'(':
 				if (escaped ^ (cflags & REG_EXTENDED)) {
-					PARSE_UNIT('(', ')');
-					END_SEGMENT(true);
-				} else
-					STORE_CHAR;
+					parse_unit(regex, len, &i, L'(', L')', &has_dot, &has_lf);
+					end_segment(true, i, &st, &escaped, &tlen, &starts_with_literal);
+					goto end_segment;
+				} else {
+					store_char(heur, &pos, regex, i, &tlen, &escaped);
+					continue;
+				}
 				continue;
 
 			/*
@@ -223,9 +236,10 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 			 * (This is also the GNU behaviour.)
 			 */
 			case L'\\':
-				if (escaped)
-					STORE_CHAR;
-				else
+				if (escaped) {
+					store_char(heur, &pos, regex, i, &tlen, &escaped);
+					continue;
+				} else
 					escaped = true;
 				continue;
 
@@ -236,11 +250,13 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 			 * ERE: Skipped if first character (GNU), rest is like in BRE.
 			 */
 			case L'*':
-				if (escaped || (!(cflags & REG_EXTENDED) && (i == 0)))
-					STORE_CHAR;
-				else if ((i != 0)) {
-					DEC_POS;
-					END_SEGMENT(true);
+				if (escaped || (!(cflags & REG_EXTENDED) && (i == 0))) {
+					store_char(heur, &pos, regex, i, &tlen, &escaped);
+					continue;
+				} else if ((i != 0)) {
+					dec_pos(&pos);
+					end_segment(true, i, &st, &escaped, &tlen, &starts_with_literal);
+					goto end_segment;
 				}
 				continue;
 
@@ -255,10 +271,13 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 			case L'+':
 				if ((cflags & REG_EXTENDED) && (i == 0))
 					continue;
-				else if ((cflags & REG_EXTENDED) ^ escaped)
-					END_SEGMENT(true);
-				else
-					STORE_CHAR;
+				else if ((cflags & REG_EXTENDED) ^ escaped) {
+					end_segment(true, i, &st, &escaped, &tlen, &starts_with_literal);
+					goto end_segment;
+				} else {
+					store_char(heur, &pos, regex, i, &tlen, &escaped);
+					continue;
+				}
 				continue;
 
 			/*
@@ -272,10 +291,13 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 				if ((cflags & REG_EXTENDED) && (i == 0))
 					continue;
 				if ((cflags & REG_EXTENDED) ^ escaped) {
-					DEC_POS;
-					END_SEGMENT(true);
-				} else
-					STORE_CHAR;
+					dec_pos(&pos);
+					end_segment(true, i, &st, &escaped, &tlen, &starts_with_literal);
+					goto end_segment;
+				} else {
+					store_char(heur, &pos, regex, i, &tlen, &escaped);
+					continue;
+				}
 				continue;
 
 			/*
@@ -288,22 +310,26 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 				} else if (!(cflags & REG_EXTENDED) && escaped) {
 					errcode = REG_BADPAT;
 					goto err;
-				} else
-					STORE_CHAR;
+				} else {
+					store_char(heur, &pos, regex, i, &tlen, &escaped);
+					continue;
+				}
 				continue;
 
 			case L'.':
-				if (escaped)
-					STORE_CHAR;
-				else {
+				if (escaped) {
+					store_char(heur, &pos, regex, i, &tlen, &escaped);
+					continue;
+				} else {
 					has_dot = true;
 					tlen = (tlen == -1) ? -1 : tlen + 1;
-					END_SEGMENT(false);
+					end_segment(true, i, &st, &escaped, &tlen, &starts_with_literal);
+					goto end_segment;
 				}
 				continue;
 			case L'\n':
 				has_lf = true;
-				STORE_CHAR;
+				store_char(heur, &pos, regex, i, &tlen, &escaped);
 				continue;
 
 			/*
@@ -315,11 +341,15 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 				if (escaped) {
 					if (regex[i] == L'n') {
 						has_lf = true;
-						STORE(L'\n');
+						store(heur, &pos, L'\n', &tlen, &escaped);
+						continue;
 					}
-					END_SEGMENT(true);
-				} else
-					STORE_CHAR;
+					end_segment(true, i, &st, &escaped, &tlen, &starts_with_literal);
+					goto end_segment;
+				} else {
+					store_char(heur, &pos, regex, i, &tlen, &escaped);
+					continue;
+				}
 				continue;
 			}
 		}
