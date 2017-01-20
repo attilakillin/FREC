@@ -221,14 +221,25 @@ frec_mmatch(const void *str, size_t len, int type, size_t nmatch,
 	 * matching for each of the patterns and return the earliest.
 	 */
 	if (preg->type == MHEUR_NONE) {
-		frec_match_t **pm = NULL;
-		size_t i;
-		int first = -1;
-
 		DEBUG_PRINT("matching without multi-pattern heuristic");
 
-		/* Alloc one frec_match_t for each pattern */
-		if (need_offsets) {
+		if (!need_offsets) {
+			/* Run matches for each pattern until a match is found */
+			for (size_t i = 0; i < preg->k; i++) {
+				ret = frec_match(&preg->patterns[i], str, len, type,
+					0, NULL, eflags);
+				if (ret == REG_OK)
+					return REG_OK;
+				else if (ret != REG_NOMATCH)
+					return ret;
+			}
+			return REG_NOMATCH;
+		} else {
+			frec_match_t **pm = NULL;
+			size_t i;
+			int first = -1;
+
+			/* Alloc one frec_match_t for each pattern */
 			pm = malloc(preg->k * sizeof(frec_match_t *));
 			if (!pm)
 				return (REG_ESPACE);
@@ -237,25 +248,18 @@ frec_mmatch(const void *str, size_t len, int type, size_t nmatch,
 				if (!pm[i])
 					goto finish1;
 			}
-		}
 
-		/* Run matches for each pattern and save first matching offsets. */
-		for (i = 0; i < preg->k; i++) {
-			ret = frec_match(&preg->patterns[i], str, len, type,
-				need_offsets ? nmatch : 0, pm[i], eflags);
+			/* Run matches for each pattern and save first matching offsets. */
+			for (i = 0; i < preg->k; i++) {
+				ret = frec_match(&preg->patterns[i], str, len, type,
+					need_offsets ? nmatch : 0, pm[i], eflags);
 
 			/* Mark if there is no match for the pattern. */
-			if (!need_offsets) {
-				if (ret == REG_OK)
-					return REG_OK;
-			} else if (ret == REG_NOMATCH)
+			if (ret == REG_NOMATCH)
 				pm[i][0].m.rm_so = -1;
 			else if (ret != REG_OK)
 				goto finish1;
 		}
-
-		if (!need_offsets)
-			return REG_NOMATCH;
 
 		/* Check whether there has been a match at all. */
 		for (i = 0; i < preg->k; i++)
@@ -292,6 +296,7 @@ finish1:
 			free(pm);
 		}
 		return ret;
+		}
 	}
 
 	/*
