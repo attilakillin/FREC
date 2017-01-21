@@ -684,6 +684,8 @@ frec_match_fast(const fastmatch_t *fg, const void *data, size_t len,
 					pmatch[0].m.rm_so = j;
 					pmatch[0].m.rm_eo = j + (type == STR_WIDE ?
 					    fg->wlen : fg->len);
+					DEBUG_PRINTF("offsets: %d %d", pmatch[0].m.rm_so,
+					    pmatch[0].m.rm_eo);
 				}
 				return (REG_OK);
 			}
@@ -702,6 +704,8 @@ frec_match_fast(const fastmatch_t *fg, const void *data, size_t len,
 					pmatch[0].m.rm_so = j;
 					pmatch[0].m.rm_eo = j + ((type == STR_WIDE) ?
 					    fg->wlen : fg->len);
+					DEBUG_PRINTF("offsets: %d %d", pmatch[0].m.rm_so,
+					    pmatch[0].m.rm_eo);
 				}
 				return (REG_OK);
 			} else if (mismatch > 0)

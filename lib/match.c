@@ -208,9 +208,7 @@ frec_mmatch(const void *str, size_t len, int type, size_t nmatch,
 	int ret = REG_NOMATCH;
 	bool need_offsets;
 
-	need_offsets = (preg->searchdata &&
-	    ((wmsearch_t *)(preg->searchdata))->cflags & REG_NOSUB) &&
-	    (nmatch > 0);
+	need_offsets = !(preg->cflags & REG_NOSUB) && (nmatch > 0);
 
 #define INPUT(pos) ((type == STR_WIDE) ? (const void *)&str_wide[pos] : \
     (const void *)&str_byte[pos])
@@ -237,7 +235,8 @@ frec_mmatch(const void *str, size_t len, int type, size_t nmatch,
 		} else {
 			frec_match_t **pm = NULL;
 			size_t i;
-			int first = -1;
+			int first;
+			bool matched = false;
 
 			/* Alloc one frec_match_t for each pattern */
 			pm = malloc(preg->k * sizeof(frec_match_t *));
@@ -252,50 +251,49 @@ frec_mmatch(const void *str, size_t len, int type, size_t nmatch,
 			/* Run matches for each pattern and save first matching offsets. */
 			for (i = 0; i < preg->k; i++) {
 				ret = frec_match(&preg->patterns[i], str, len, type,
-					need_offsets ? nmatch : 0, pm[i], eflags);
+					nmatch, pm[i], eflags);
 
-			/* Mark if there is no match for the pattern. */
-			if (ret == REG_NOMATCH)
-				pm[i][0].m.rm_so = -1;
-			else if (ret != REG_OK)
-				goto finish1;
-		}
-
-		/* Check whether there has been a match at all. */
-		for (i = 0; i < preg->k; i++)
-			if (pm[i][0].m.rm_so != -1) {
-				first = i;
-				break;
+				/* Mark if there is no match for the pattern. */
+				if (ret == REG_OK)
+					matched = true;
+				else if (ret == REG_NOMATCH)
+					pm[i][0].m.rm_so = -1;
+				else
+					goto finish1;
 			}
 
-		if (first == -1)
-			ret = REG_NOMATCH;
-		else {
-			/* If there are matches, find the first one. */
-
-			for (i = first + 1; i < preg->k; i++)
-				if ((pm[i][0].m.rm_so < pm[first][0].m.rm_so) ||
-				    ((pm[i][0].m.rm_so == pm[first][0].m.rm_so) && (pm[i][0].m.rm_eo > pm[first][0].m.rm_eo))) {
-					first = i;
+			if (!matched) {
+				ret = REG_NOMATCH;
+				goto finish1;
+			} else {
+				/* If there are matches, find the first one. */
+				first = 0;
+				for (i = 1; i < preg->k; i++) {
+					if (pm[i][0].m.rm_so == -1)
+						continue;
+					else if ((pm[i][0].m.rm_so < pm[first][0].m.rm_so) ||
+					    ((pm[i][0].m.rm_so == pm[first][0].m.rm_so) && (pm[i][0].m.rm_eo > pm[first][0].m.rm_eo)))
+						first = i;
 				}
-		}
+			}
 
-		/* Fill in the offsets before returning. */
-		for (i = 0; need_offsets && (i < nmatch); i++) {
-			pmatch[i].m.rm_so = pm[first][i].m.rm_so;
-			pmatch[i].m.rm_eo = pm[first][i].m.rm_eo;
-			pmatch[i].p = i;
-		}
-		ret = REG_OK;
+			/* Fill in the offsets before returning. */
+			for (i = 0; i < nmatch; i++) {
+				pmatch[i].m.rm_so = pm[first][i].m.rm_so;
+				pmatch[i].m.rm_eo = pm[first][i].m.rm_eo;
+				pmatch[i].p = i;
+				DEBUG_PRINTF("offsets %zu: %d %d", i, pmatch[i].m.rm_so, pmatch[i].m.rm_eo);
+			}
+			ret = REG_OK;
 
 finish1:
-		if (pm) {
-			for (i = 0; i < preg->k; i++)
-				if (pm[i])
-					free(pm[i]);
-			free(pm);
-		}
-		return ret;
+			if (pm) {
+				for (i = 0; i < preg->k; i++)
+					if (pm[i])
+						free(pm[i]);
+				free(pm);
+			}
+			return ret;
 		}
 	}
 

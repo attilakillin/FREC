@@ -11,6 +11,7 @@ typedef struct {
 	frec_t *patterns;	/* regex_t structure for each pattern */
 	int type;		/* XXX (private) Matching type */
 	int err;		/* XXX (private) Which pattern failed */
+	int cflags;		/* XXX (private) cflags */
 	void *searchdata;	/* Wu-Manber internal data */
 } mregex_t;
 

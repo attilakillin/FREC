@@ -148,6 +148,7 @@ frec_mcompile(mregex_t *preg, size_t nr, const wchar_t **wregex,
 	preg->k = nr;
 	preg->searchdata = NULL;
 	preg->patterns = malloc(nr * sizeof(frec_t));
+	preg->cflags = cflags;
 	if (!preg->patterns)
 		return (REG_ESPACE);
 
