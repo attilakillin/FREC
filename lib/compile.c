@@ -177,19 +177,27 @@ frec_mcompile(mregex_t *preg, size_t nr, const wchar_t **wregex,
         } else if (cflags & REG_NEWLINE) {
 		DEBUG_PRINT("strategy MHEUR_LONGEST");
                 preg->type = MHEUR_LONGEST;
-        }
-	else {
-		/* If not literal, check if all patterns can be matched with
-		  the HEUR_LONGEST strategy. Otherwise, it is not possible
-		  to speed up multiple pattern matching. */
+        } else {
+		/* If not explicitly marked as literal, check if all patterns
+		 * can be matched either with literal matching or the
+		 * HEUR_LONGEST strategy. Otherwise, it is not possible
+		 * to speed up multiple pattern matching.
+		 */
 		preg->type = MHEUR_LONGEST;
-		for (size_t i = 0; i < nr; i++)
-			if ((preg->patterns[i].heur == NULL) ||
-			    (((heur_t *)(preg->patterns[i].heur))->type != HEUR_LONGEST)) {
+		for (size_t i = 0; i < nr; i++) {
+			/* Literal */
+			if (preg->patterns[i].shortcut != NULL)
+				continue;
+			/* HEUR_LONGEST */
+			else if ((preg->patterns[i].heur != NULL)
+			    && (((heur_t *)(preg->patterns[i].heur))->type == HEUR_LONGEST))
+				continue;
+			else {
 				DEBUG_PRINT("strategy MHEUR_NONE");
 				preg->type = MHEUR_NONE;
 				goto finish;
 			}
+		}
 		if (preg->type == MHEUR_LONGEST)
 			DEBUG_PRINT("strategy MHEUR_LONGEST");
 	}
