@@ -216,8 +216,13 @@ frec_mcompile(mregex_t *preg, size_t nr, const wchar_t **wregex,
 			goto err;
 
 		for (size_t j = 0; j < nr; j++) {
-			frags[j] = ((heur_t *)(preg->patterns[j].heur))->warr[0];
-			siz[j] = ((heur_t *)(preg->patterns[j].heur))->siz[0];
+			if (preg->patterns[j].shortcut != NULL) {
+				frags[j] = preg->patterns[j].shortcut->wpattern;
+				siz[j] = preg->patterns[j].shortcut->wlen;
+			} else {
+				frags[j] = ((heur_t *)(preg->patterns[j].heur))->warr[0];
+				siz[j] = ((heur_t *)(preg->patterns[j].heur))->siz[0];
+			}
 		}
 	} else {
 		frags = wregex;
