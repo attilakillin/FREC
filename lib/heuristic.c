@@ -70,7 +70,7 @@ typedef struct parser_state {
 	char *bheur;
 	size_t blen;
 	wchar_t *wheur;
-	size_t wlen; 
+	size_t wlen;
 } parser_state;
 
 inline static int init_state(parser_state *state, const wchar_t *regex,
