@@ -11,13 +11,7 @@
 #define HEUR_LONGEST		1
 
 typedef struct {
-	char **arr;
-	size_t *siz;
-
-	wchar_t **warr;
-	size_t *wsiz;
-
-	fastmatch_t **heurs;
+	fastmatch_t *heur;
 	ssize_t tlen;
 	int type;
 } heur_t;

@@ -220,8 +220,8 @@ frec_mcompile(mregex_t *preg, size_t nr, const wchar_t **wregex,
 				frags[j] = preg->patterns[j].shortcut->wpattern;
 				siz[j] = preg->patterns[j].shortcut->wlen;
 			} else {
-				frags[j] = ((heur_t *)(preg->patterns[j].heur))->warr[0];
-				siz[j] = ((heur_t *)(preg->patterns[j].heur))->siz[0];
+				frags[j] = ((heur_t *)(preg->patterns[j].heur))->heur->wpattern;
+				siz[j] = ((heur_t *)(preg->patterns[j].heur))->heur->wlen;
 			}
 		}
 	} else {

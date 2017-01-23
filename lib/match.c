@@ -94,7 +94,7 @@ frec_match_heur(regex_t *preg, heur_t *heur, const void *str,
 			SEEK_TO(st);
 
 			/* Match for heuristic */
-			ret = frec_match_fast(heur->heurs[0], str, len - st,
+			ret = frec_match_fast(heur->heur, str, len - st,
 			    type, nmatch, pmatch, eflags);
 			if (ret != REG_OK)
 				return ret;
@@ -154,7 +154,7 @@ frec_match_heur(regex_t *preg, heur_t *heur, const void *str,
 
 			/* Find beginning */
 			DEBUG_PRINT("matching for prefix heuristics");
-			ret = frec_match_fast(heur->heurs[0], str, len - st,
+			ret = frec_match_fast(heur->heur, str, len - st,
 			    type, nmatch, pmatch, eflags);
 			if (ret != REG_OK)
 				return (ret);
