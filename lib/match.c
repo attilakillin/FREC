@@ -36,25 +36,99 @@
 #include "frec.h"
 #include "wu-manber.h"
 
-#define REGEXEC(preg, str, len, type, nmatch, pmatch, eflags)	\
-{								\
-	regmatch_t *pm;						\
-								\
-	pm = malloc(sizeof(regmatch_t) * nmatch);		\
-	if (pm == NULL)						\
-		return (REG_ESPACE);				\
-								\
-	for (i = 0; i < nmatch; i++)				\
-		pm[i] = pmatch[i].m;				\
-								\
-	ret = ((type == STR_WIDE) ?					\
-	    (_dist_regwnexec(preg, str, len, nmatch, pm, eflags)) :	\
-	    (_dist_regnexec(preg, str, len, nmatch, pm, eflags)));	\
-									\
-	if (ret == REG_OK)						\
-		for (i = 0; i < nmatch; i++)				\
-			pmatch[i].m = pm[i];				\
-	free(pm);							\
+typedef struct matcher_state {
+	regex_t *preg;
+	heur_t *heur;
+	const void *str;
+	size_t len;
+	int type;
+	size_t nmatch;
+	frec_match_t *pmatch;
+	int eflags;
+
+	const char *data_byte;
+	const char *data_wide;
+	size_t start;
+	size_t rem;
+	int ret;
+} matcher_state;
+
+inline static void init_state(matcher_state *state, regex_t *preg,
+    heur_t *heur, const void *str, size_t len, int type, size_t nmatch,
+    frec_match_t pmatch[], int eflags) {
+
+	state->preg = preg;
+	state->heur = heur;
+	state->str = str;
+	state->len = len;
+	state->type = type;
+	state->nmatch = nmatch;
+	state->pmatch = pmatch;
+	state->eflags = eflags;
+
+	state->data_byte = str;
+	state->data_wide = str;
+	state->start = 0;
+	state->rem = 0;
+	state->ret = 0;
+}
+
+inline static void fix_offsets(matcher_state *state) {
+
+	for (size_t i = 0; i < state->nmatch; i++) {
+		state->pmatch[i].m.rm_so += state->start;
+		state->pmatch[i].m.rm_eo += state->start;
+	}
+}
+
+inline static void seek_to(matcher_state *state, size_t off) {
+
+	state->str = (state->type == STR_WIDE)
+	    ? (const void *)&state->data_wide[off]
+	    : (const void *)&state->data_byte[off];
+}
+
+inline static size_t search_lf_backward(matcher_state *state, size_t off) {
+
+	for (size_t so = state->start + off; ; so--)
+		if ((state->type == STR_WIDE) ? (state->data_wide[so] ==
+		    L'\n') : (state->data_byte[so] == '\n') || (so == 0))
+			return so;
+
+}
+
+inline static size_t search_lf_forward(matcher_state *state, size_t off) {
+	size_t eo;
+
+	for (eo = state->start + off; state->start + off < state-> len; eo++)
+		if ((state->type == STR_WIDE) ? (state->data_wide[eo] ==
+		    L'\n') : (state->data_byte[eo] == '\n'))
+			break;
+	return eo;
+}
+
+inline static int _regexec(const regex_t *preg, const void *str, size_t len,
+    int type, size_t nmatch, frec_match_t pmatch[], int eflags) {
+	regmatch_t *pm;
+	int ret;
+
+	pm = malloc(sizeof(regmatch_t) * nmatch);
+	if (pm == NULL)
+		return (REG_ESPACE);
+
+	for (size_t i = 0; i < nmatch; i++)
+		pm[i] = pmatch[i].m;
+
+	ret = ((type == STR_WIDE) ?
+	    (_dist_regwnexec(preg, str, len, nmatch, pm, eflags)) :
+	    (_dist_regnexec(preg, str, len, nmatch, pm, eflags)));
+
+	if (ret == REG_OK)
+		for (size_t i = 0; i < nmatch; i++)
+			pmatch[i].m = pm[i];
+	free(pm);
+
+	return ret;
 }
 
 int
@@ -62,25 +136,9 @@ frec_match_heur(regex_t *preg, heur_t *heur, const void *str,
     size_t len, int type, size_t nmatch, frec_match_t pmatch[], int eflags)
 {
 	int ret;
-	size_t st = 0, i = 1, n;
-	const char *data_byte = str;
-	const wchar_t *data_wide = str;
+	matcher_state state;
 
-#define FIX_OFFSETS(adj)						\
-	if (ret == REG_NOMATCH) {					\
-		adj;							\
-		continue;						\
-	/* XXX: !REG_NOSUB */						\
-	} else if (ret == REG_OK)					\
-		for (i = 0; i < nmatch; i++) {				\
-			pmatch[i].m.rm_so += st;			\
-			pmatch[i].m.rm_eo += st;			\
-		}							\
-	return ret;
-
-#define SEEK_TO(off)							\
-	str = (type == STR_WIDE) ? (const void *)&data_wide[off] :	\
-	    (const void *)&data_byte[off];
+	init_state(&state, preg, heur, str, len, type, nmatch, pmatch, eflags);
 
 	/*
 	 * REG_NEWLINE: looking for the longest fragment and then
@@ -88,13 +146,13 @@ frec_match_heur(regex_t *preg, heur_t *heur, const void *str,
 	 */
 	if (heur->type == HEUR_LONGEST) {
 		DEBUG_PRINT("using HEUR_LONGEST strategy");
-		while (st < len) {
+		while (state.start < state.len) {
 			size_t eo, so;
 
-			SEEK_TO(st);
+			seek_to(&state, state.start);
 
 			/* Match for heuristic */
-			ret = frec_match_fast(heur->heur, str, len - st,
+			ret = frec_match_fast(heur->heur, str, len - state.start,
 			    type, nmatch, pmatch, eflags);
 			if (ret != REG_OK)
 				return ret;
@@ -104,19 +162,8 @@ frec_match_heur(regex_t *preg, heur_t *heur, const void *str,
 			 * look for newlines.
 			 */
 			if (heur->tlen == -1) {
-				for (so = st + pmatch[0].m.rm_so - 1; ; so--) {
-					if ((type == STR_WIDE) ? (data_wide[so] ==
-					    L'\n') : (data_byte[so] == '\n'))
-						break;
-					if (so == 0)
-						break;
-				}
-
-				for (eo = st + pmatch[0].m.rm_eo; st + eo < len; eo++) {
-					if ((type == STR_WIDE) ? (data_wide[eo] ==
-					    L'\n') : (data_byte[eo] == '\n'))
-						break;
-				}
+				so = search_lf_backward(&state, pmatch[0].m.rm_so - 1);
+				eo = search_lf_forward(&state, pmatch[0].m.rm_eo);
 			}
 
 			/*
@@ -124,19 +171,24 @@ frec_match_heur(regex_t *preg, heur_t *heur, const void *str,
 			 * context that we can, without looking for explicit newlines.
 			 */
 			else {
-				size_t rem = heur->tlen - (pmatch[0].m.rm_eo -
+				state.rem = heur->tlen - (pmatch[0].m.rm_eo -
 				    pmatch[0].m.rm_so);
 
-				so = st + pmatch[0].m.rm_so <= rem ? 0 :
-				    st + pmatch[0].m.rm_so - rem;
-				eo = st + pmatch[0].m.rm_eo + rem >= len ? len :
-				    st + pmatch[0].m.rm_eo + rem;
+				so = state.start + pmatch[0].m.rm_so <= state.rem ? 0 :
+				    state.start + pmatch[0].m.rm_so - state.rem;
+				eo = state.start + pmatch[0].m.rm_eo + state.rem >= state.len ? state.len :
+				    state.start + pmatch[0].m.rm_eo + state.rem;
 			}
 
-			SEEK_TO(so);
-			REGEXEC(preg, str, eo - so, type, nmatch,
-			    pmatch, eflags);
-			FIX_OFFSETS(st = eo);
+			seek_to(&state, so);
+			ret = _regexec(state.preg, state.str, eo - so, state.type, state.nmatch,
+			    state.pmatch, state.eflags);
+			if (ret == REG_NOMATCH) {
+				state.start = eo;
+				continue;
+			}
+			fix_offsets(&state);
+			return ret;
 		}
 	        return (REG_NOMATCH);
 	}
@@ -149,27 +201,31 @@ frec_match_heur(regex_t *preg, heur_t *heur, const void *str,
 	 * stored in n.
 	 */
 	else {
-		while (st < len) {
-			SEEK_TO(st);
+		while (state.start < state.len) {
+			seek_to(&state, state.start);
 
 			/* Find beginning */
 			DEBUG_PRINT("matching for prefix heuristics");
-			ret = frec_match_fast(heur->heur, str, len - st,
-			    type, nmatch, pmatch, eflags);
+			ret = frec_match_fast(state.heur->heur, state.str,
+			    state.len - state.start, state.type,
+			    state.nmatch, state.pmatch, state.eflags);
 			if (ret != REG_OK)
 				return (ret);
-			st += pmatch[0].m.rm_so;
-			n = pmatch[0].m.rm_eo - pmatch[0].m.rm_so;
 
-			size_t l = (heur->tlen == -1) ? (len - st) :
-				(size_t)(heur->tlen);
+			state.start += state.pmatch[0].m.rm_so;
+			size_t new_len = state.len - state.start;
 
-			if (l > len - st)
+			if (new_len > state.len - state.start)
 				return (REG_NOMATCH);
 
-			SEEK_TO(st);
-			REGEXEC(preg, str, l, type, nmatch, pmatch, eflags);
-			FIX_OFFSETS(st += n);
+			seek_to(&state, state.start);
+			ret = _regexec(state.preg, state.str, new_len,
+			    state.type, state.nmatch, state.pmatch,
+			    state.eflags);
+
+			if (ret == REG_OK)
+				fix_offsets(&state);
+			return ret;
 		}
 		return (REG_NOMATCH);
 	}
@@ -181,7 +237,6 @@ frec_match(const frec_t *preg, const void *str, size_t len,
 {
 	fastmatch_t *shortcut = preg->shortcut;
 	heur_t *heur = preg->heur;
-	size_t i;
 	int ret = REG_NOMATCH;
 
 	if (shortcut != NULL) {
@@ -195,7 +250,7 @@ frec_match(const frec_t *preg, const void *str, size_t len,
 	}
 
 	DEBUG_PRINT("matching with automaton matcher");
-	REGEXEC(&preg->orig, str, len, type, nmatch, pmatch, eflags);
+	ret = _regexec(&preg->orig, str, len, type, nmatch, pmatch, eflags);
 	return (ret);
 }
 
