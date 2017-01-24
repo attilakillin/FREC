@@ -309,217 +309,217 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 
 	DEBUG_PRINT("enter");
 
+	/*
+	 * Process the pattern char-by-char.
+	 *
+	 * state.procidx: position in regex
+	 * state.heur: buffer for the fragment being extracted
+	 * state.heurpos: buffer position
+	 */
+	for (state.procidx = 0; state.procidx < state.len; state.procidx++) {
+		switch (state.regex[state.procidx]) {
+
 		/*
-		 * Process the pattern char-by-char.
-		 *
-		 * state.procidx: position in regex
-		 * state.heur: buffer for the fragment being extracted
-		 * state.heurpos: buffer position
+		 * BRE/ERE: Bracketed expression ends the segment or the
+		 * brackets are treated as normal if at least the opening
+		 * bracket is escaped.
 		 */
-		for (state.procidx = 0; state.procidx < state.len; state.procidx++) {
-			switch (state.regex[state.procidx]) {
-
-			/*
-			 * BRE/ERE: Bracketed expression ends the segment or the
-			 * brackets are treated as normal if at least the opening
-			 * bracket is escaped.
-			 */
-			case L'[':
-				if (state.escaped) {
-					store_char(&state);
-					continue;
-				} else {
-					if (parse_set(&state) == REG_BADPAT)
-						return REG_BADPAT;
-					state.tlen = (state.tlen == -1) ? -1 : state.tlen + 1;
-					errcode = end_segment(&state, false);
-					if (errcode != REG_OK)
-						goto err;
-				}
-				continue;
-
-			/*
-			 * If a repetition marker, erases the repeting character
-			 * and terminates the segment, otherwise treated as a normal
-			 * character.
-			 * BRE: repetition marker if ESCAPED.
-			 * ERE: repetition marker if NOT ESCAPED.
-			 */
-			case L'{':
-				/* Be more permissive at the beginning of the pattern */
-				if (state.escaped && (state.procidx == 1)) {
-					store_char(&state);
-					continue;
-				} else if (state.procidx == 0) {
-					store_char(&state);
-					continue;
-				}
-
-				if (state.escaped ^ state.ere) {
-					drop_last_char(&state);
-					parse_unit(&state, L'{', L'}');
-					errcode = end_segment(&state, true);
-					if (errcode != REG_OK)
-						goto err;
-				} else {
-					store_char(&state);
-					continue;
-				}
-				continue;
-
-			/*
-			 * Terminates the current segment if used for a subexpression,
-			 * otherwise treated as a normal character.
-			 * BRE: subexpression if ESCAPED.
-			 * ERE: subexpression if NOT ESCAPED.
-			 */
-			case L'(':
-				if (state.escaped ^ state.ere) {
-					parse_unit(&state, L'(', L')');
-					errcode = end_segment(&state, true);
-					if (errcode != REG_OK)
-						goto err;
-				} else {
-					store_char(&state);
-					continue;
-				}
-				continue;
-
-			/*
-			 * Sets escaped flag.
-			 * Escaped escape is treated as a normal character.
-			 * (This is also the GNU behaviour.)
-			 */
-			case L'\\':
-				if (state.escaped) {
-					store_char(&state);
-					continue;
-				} else
-					state.escaped = true;
-				continue;
-
-			/*
-			 * BRE: If not the first character and not escaped, erases the
-			 * last character and terminates the segment.
-			 * Otherwise treated as a normal character.
-			 * ERE: Skipped if first character (GNU), rest is like in BRE.
-			 */
-			case L'*':
-				/* Be more permissive at the beginning of the pattern */
-				if (state.escaped || (!state.ere && (state.procidx == 0))) {
-					store_char(&state);
-					continue;
-				} else {
-					drop_last_char(&state);
-					errcode = end_segment(&state, true);
-					if (errcode != REG_OK)
-						goto err;
-				}
-				continue;
-
-			/*
-			 * BRE: it is a normal character, behavior is undefined
-			 * when escaped.
-			 * ERE: it is special unless escaped. Terminate segment
-			 * when not escaped. Last character is not removed because it
-			 * must occur at least once. It is skipped when first
-			 * character (GNU).
-			 */
-			case L'+':
-				/* Be more permissive at the beginning of the pattern */
-				if (state.ere && (state.procidx == 0))
-					continue;
-				else if (state.ere ^ state.escaped) {
-					errcode = end_segment(&state, true);
-					if (errcode != REG_OK)
-						goto err;
-				} else {
-					store_char(&state);
-					continue;
-				}
-				continue;
-
-			/*
-			 * BRE: it is a normal character, behavior is undefined
-			 * when escaped.
-			 * ERE: it is special unless escaped. Terminate segment
-			 * when not escaped. Last character is removed. Skipped when
-			 * first character (GNU).
-			 */
-			case L'?':
-				/* Be more permissive at the beginning of the pattern */
-				if (state.ere && (state.procidx == 0))
-					continue;
-				if (state.ere ^ state.escaped) {
-					drop_last_char(&state);
-					errcode = end_segment(&state, true);
-					if (errcode != REG_OK)
-						goto err;
-				} else {
-					store_char(&state);
-					continue;
-				}
-				continue;
-
-			/*
-			 * BRE: it is a normal character, behavior is undefined
-			 * when escaped.
-			 * ERE: alternation marker; unsupported.
-			 */
-			case L'|':
-				if (state.ere ^ state.escaped) {
-					errcode = REG_BADPAT;
-					goto err;
-				} else {
-					store_char(&state);
-					continue;
-				}
-				continue;
-
-			/*
-			 * BRE/ERE: matches any single character; normal character
-			 * if escaped.
-			 */
-			case L'.':
-				if (state.escaped) {
-					store_char(&state);
-					continue;
-				} else {
-					state.has_dot = true;
-					state.tlen = (state.tlen == -1) ? -1 : state.tlen + 1;
-					errcode = end_segment(&state, false);
-					if (errcode != REG_OK)
-						goto err;
-				}
-				continue;
-
-			case L'\n':
-				state.has_lf = true;
+		case L'[':
+			if (state.escaped) {
 				store_char(&state);
 				continue;
+			} else {
+				if (parse_set(&state) == REG_BADPAT)
+					return REG_BADPAT;
+				state.tlen = (state.tlen == -1) ? -1 : state.tlen + 1;
+				errcode = end_segment(&state, false);
+				if (errcode != REG_OK)
+					goto err;
+			}
+			continue;
 
-			/*
-			 * If escaped, terminates segment.
-			 * Otherwise adds current character to the current segment
-			 * by copying it to the temporary space.
-			 */
-			default:
-				if (state.escaped) {
-					if (state.regex[state.procidx] == L'n') {
-						state.has_lf = true;
-						store(&state, L'\n');
-						continue;
-					}
-					errcode = end_segment(&state, true);
-					if (errcode != REG_OK)
-						goto err;
-				} else {
-					store_char(&state);
-					continue;
-				}
+		/*
+		 * If a repetition marker, erases the repeting character
+		 * and terminates the segment, otherwise treated as a normal
+		 * character.
+		 * BRE: repetition marker if ESCAPED.
+		 * ERE: repetition marker if NOT ESCAPED.
+		 */
+		case L'{':
+			/* Be more permissive at the beginning of the pattern */
+			if (state.escaped && (state.procidx == 1)) {
+				store_char(&state);
+				continue;
+			} else if (state.procidx == 0) {
+				store_char(&state);
 				continue;
 			}
+
+			if (state.escaped ^ state.ere) {
+				drop_last_char(&state);
+				parse_unit(&state, L'{', L'}');
+				errcode = end_segment(&state, true);
+				if (errcode != REG_OK)
+					goto err;
+			} else {
+				store_char(&state);
+				continue;
+			}
+			continue;
+
+		/*
+		 * Terminates the current segment if used for a subexpression,
+		 * otherwise treated as a normal character.
+		 * BRE: subexpression if ESCAPED.
+		 * ERE: subexpression if NOT ESCAPED.
+		 */
+		case L'(':
+			if (state.escaped ^ state.ere) {
+				parse_unit(&state, L'(', L')');
+				errcode = end_segment(&state, true);
+				if (errcode != REG_OK)
+					goto err;
+			} else {
+				store_char(&state);
+				continue;
+			}
+			continue;
+
+		/*
+		 * Sets escaped flag.
+		 * Escaped escape is treated as a normal character.
+		 * (This is also the GNU behaviour.)
+		 */
+		case L'\\':
+			if (state.escaped) {
+				store_char(&state);
+				continue;
+			} else
+				state.escaped = true;
+			continue;
+
+		/*
+		 * BRE: If not the first character and not escaped, erases the
+		 * last character and terminates the segment.
+		 * Otherwise treated as a normal character.
+		 * ERE: Skipped if first character (GNU), rest is like in BRE.
+		 */
+		case L'*':
+			/* Be more permissive at the beginning of the pattern */
+			if (state.escaped || (!state.ere && (state.procidx == 0))) {
+				store_char(&state);
+				continue;
+			} else {
+				drop_last_char(&state);
+				errcode = end_segment(&state, true);
+				if (errcode != REG_OK)
+					goto err;
+			}
+			continue;
+
+		/*
+		 * BRE: it is a normal character, behavior is undefined
+		 * when escaped.
+		 * ERE: it is special unless escaped. Terminate segment
+		 * when not escaped. Last character is not removed because it
+		 * must occur at least once. It is skipped when first
+		 * character (GNU).
+		 */
+		case L'+':
+			/* Be more permissive at the beginning of the pattern */
+			if (state.ere && (state.procidx == 0))
+				continue;
+			else if (state.ere ^ state.escaped) {
+				errcode = end_segment(&state, true);
+				if (errcode != REG_OK)
+					goto err;
+			} else {
+				store_char(&state);
+				continue;
+			}
+			continue;
+
+		/*
+		 * BRE: it is a normal character, behavior is undefined
+		 * when escaped.
+		 * ERE: it is special unless escaped. Terminate segment
+		 * when not escaped. Last character is removed. Skipped when
+		 * first character (GNU).
+		 */
+		case L'?':
+			/* Be more permissive at the beginning of the pattern */
+			if (state.ere && (state.procidx == 0))
+				continue;
+			if (state.ere ^ state.escaped) {
+				drop_last_char(&state);
+				errcode = end_segment(&state, true);
+				if (errcode != REG_OK)
+					goto err;
+			} else {
+				store_char(&state);
+				continue;
+			}
+			continue;
+
+		/*
+		 * BRE: it is a normal character, behavior is undefined
+		 * when escaped.
+		 * ERE: alternation marker; unsupported.
+		 */
+		case L'|':
+			if (state.ere ^ state.escaped) {
+				errcode = REG_BADPAT;
+				goto err;
+			} else {
+				store_char(&state);
+				continue;
+			}
+			continue;
+
+		/*
+		 * BRE/ERE: matches any single character; normal character
+		 * if escaped.
+		 */
+		case L'.':
+			if (state.escaped) {
+				store_char(&state);
+				continue;
+			} else {
+				state.has_dot = true;
+				state.tlen = (state.tlen == -1) ? -1 : state.tlen + 1;
+				errcode = end_segment(&state, false);
+				if (errcode != REG_OK)
+					goto err;
+			}
+			continue;
+
+		case L'\n':
+			state.has_lf = true;
+			store_char(&state);
+			continue;
+
+		/*
+		 * If escaped, terminates segment.
+		 * Otherwise adds current character to the current segment
+		 * by copying it to the temporary space.
+		 */
+		default:
+			if (state.escaped) {
+				if (state.regex[state.procidx] == L'n') {
+					state.has_lf = true;
+					store(&state, L'\n');
+					continue;
+				}
+				errcode = end_segment(&state, true);
+				if (errcode != REG_OK)
+					goto err;
+			} else {
+				store_char(&state);
+				continue;
+			}
+			continue;
 		}
+	}
 
 	if (state.heurpos > 0) {
 		errcode = end_segment(&state, false);
