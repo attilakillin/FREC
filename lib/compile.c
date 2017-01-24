@@ -37,6 +37,9 @@
 #include "frec.h"
 #include "wu-manber.h"
 
+/*
+ * Prepare heuristics for single pattern matching.
+ */
 int
 frec_compile(frec_t *preg, const wchar_t *wregex, size_t wn,
     const char *regex, size_t n, int cflags)
@@ -47,8 +50,8 @@ frec_compile(frec_t *preg, const wchar_t *wregex, size_t wn,
 
 	/*
 	 * First, we always compile the NFA and it also serves as
-	 * pattern validation.  In this way, validation is not
-	 * scattered through the code.
+	 * pattern validation.  In this way, we reuse the library's
+	 * validation logic.
 	 */
 	ret = _dist_regncomp(&preg->orig, regex, n, cflags);
 	if (ret != REG_OK) {
@@ -75,7 +78,10 @@ frec_compile(frec_t *preg, const wchar_t *wregex, size_t wn,
 	return (REG_OK);
 }
 
-
+/*
+ * Try to compile a pattern for literal matching, regardless of
+ * whether REG_LITERAL is explicitly speicified or not.
+ */
 int
 frec_compile_bm(frec_t *preg, const wchar_t *wregex, size_t wn,
     const char *regex, size_t n, int cflags)
@@ -85,10 +91,17 @@ frec_compile_bm(frec_t *preg, const wchar_t *wregex, size_t wn,
 
 	DEBUG_PRINT("enter");
 
-	if (n < 2)
+	/*
+	 * Pattern length must be > 2; otherwise literal
+	 * matching is inefficient.
+	 */
+	if (n < 2) {
+		DEBUG_PRINT("pattern too short for literal matching");
 		goto too_short;
+	}
+
 	shortcut = malloc(sizeof(fastmatch_t));
-	if (!shortcut)
+	if (shortcut == NULL)
 		return (REG_ESPACE);
 	ret = (cflags & REG_LITERAL)
 	    ? frec_proc_literal(shortcut, wregex, wn, regex, n, cflags)
@@ -106,6 +119,10 @@ too_short:
 	return (ret);
 }
 
+/*
+ * If the pattern is not literal, it may still be possible to use
+ * a literal as a heuristics.
+ */
 int
 frec_compile_heur(frec_t *preg, const wchar_t *regex, size_t n, int cflags)
 {
@@ -113,7 +130,7 @@ frec_compile_heur(frec_t *preg, const wchar_t *regex, size_t n, int cflags)
 	int ret;
 
 	heur = malloc(sizeof(heur_t));
-	if (!heur)
+	if (heur == NULL)
 		return (REG_ESPACE);
 
 	ret = frec_proc_heur(heur, regex, n, cflags);
@@ -128,12 +145,9 @@ frec_compile_heur(frec_t *preg, const wchar_t *regex, size_t n, int cflags)
 	return (ret);
 }
 
-/* TODO:
- *
- * - REG_ICASE
- * - Test
+/*
+ * Prepare heuristics for multiple pattern matching.
  */
-
 int
 frec_mcompile(mregex_t *preg, size_t nr, const wchar_t **wregex,
     size_t *wn, const char **regex, size_t *n, int cflags)
