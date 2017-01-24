@@ -546,3 +546,11 @@ err:
 	free_state(&state);
 	return (errcode);
 }
+
+void
+frec_free_heur(heur_t *h)
+{
+
+	if (h->heur)
+		frec_free_fast(h->heur);
+}
