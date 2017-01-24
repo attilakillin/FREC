@@ -48,28 +48,31 @@
  */
 
 typedef struct parser_state {
+
+	/* provided */
 	const wchar_t *regex;
 	size_t len;
 	bool ere;
 	bool newline;
 
-	size_t curpos;
-	size_t procidx;
+	/* calculations */
+	size_t procidx;		// iteration var up to len
 	bool escaped;
-	wchar_t *heur;
-	size_t heurpos;
+	wchar_t *heur;		// current fragment
+	size_t heurpos;		// current fragment len
 	wchar_t **fragments;
 	size_t fragment_no;
 	size_t fragment_lens[MAX_FRAGMENTS];
 
-	ssize_t tlen;
+	/* results */
+	ssize_t tlen;		// length limit
 	bool has_dot;
 	bool has_lf;
 	bool has_negative_set;
 	bool starts_with_literal;
-	char *bheur;
+	char *bheur;		// chosen literal
 	size_t blen;
-	wchar_t *wheur;
+	wchar_t *wheur;		// chosen literal - wide
 	size_t wlen;
 } parser_state;
 
@@ -91,6 +94,8 @@ inline static int init_state(parser_state *state, const wchar_t *regex,
 		free(state->heur);
 		return (REG_ESPACE);
 	}
+
+	state->starts_with_literal = true;
 
 	return (REG_OK);
 }
@@ -141,8 +146,6 @@ inline static int parse_brackets(parser_state *state) {
 		state->has_negative_set = true;
 		state->procidx++;
 	}
-	if (state->regex[state->procidx] == L']')
-		state->procidx++;
 
 	for (; state->procidx < state->len; state->procidx++) {
 		if (state->regex[state->procidx] == L'[')
@@ -158,19 +161,18 @@ inline static int parse_brackets(parser_state *state) {
  */
 inline static int end_segment(parser_state *state, bool varlen) {
 
-	if (state->tlen == 0)
+	if ((state->fragment_no == 0) && (state->heurpos == 0))
 		state->starts_with_literal = false;
 	if (varlen)
 		state->tlen = -1;
-	state->curpos = state->procidx + 1;
 	state->escaped = false;
 
-	if (state->curpos == state->len && state->heurpos == 0)
+	if (state->procidx >= state->len && state->heurpos == 0)
 		return (state->fragment_no == 0 ? REG_BADPAT : REG_OK);
 
 	/* Continue if we got some variable-length part */
-	if (state->curpos == 0)
-		return -1;
+	if (state->heurpos == 0)
+		return (REG_OK);
 
 	/* Too many fragments - should never happen but to be safe */
 	if (state->fragment_no == MAX_FRAGMENTS)
@@ -185,10 +187,6 @@ inline static int end_segment(parser_state *state, bool varlen) {
 	state->fragment_lens[state->fragment_no] = state->heurpos;
 	state->fragment_no++;
 	state->heurpos = 0;
-
-	/* Check whether there is more input */
-	if (state->curpos == state->len)
-		return (REG_OK);
 
 	return (REG_OK);
 }
@@ -216,6 +214,18 @@ inline static int fill_heuristics(parser_state *state, heur_t *h) {
 
 	h->tlen = state->tlen;
 
+#ifdef WITH_DEBUG
+	for (size_t i = 0; i < state->fragment_no; i++)
+		DEBUG_PRINTF("Fragment %zu - %ls", i, state->fragments[i]);
+	DEBUG_PRINTF("Length limit: %zu", state->tlen);
+	DEBUG_PRINTF("May contain lf: %c",
+	    state->has_dot || state->has_lf || state->has_negative_set
+	    ? 'y' : 'n');
+	DEBUG_PRINTF("Starts with literal: %c", state->starts_with_literal
+	    ? 'y' : 'n');
+#endif
+
+
 	/* Choose strategy */
 	if (state->tlen > 0)
 		h->type = HEUR_LONGEST;
@@ -227,15 +237,11 @@ inline static int fill_heuristics(parser_state *state, heur_t *h) {
 	else
 		return (REG_BADPAT);
 
-	DEBUG_PRINTF("strategy: %s", h->type == HEUR_LONGEST ?
-	    "HEUR_LONGEST" : "HEUR_PREFIX");
-
 	if (h->type == HEUR_PREFIX) {
 		/* Save beginning */
 		state->wheur = state->fragments[0];
 		state->wlen = state->fragment_lens[0];
 		state->fragments[0] = NULL;
-		DEBUG_PRINTF("beginning fragment: %ls", state->wheur);
 	} else {
 		size_t m = 0;
 
@@ -245,7 +251,6 @@ inline static int fill_heuristics(parser_state *state, heur_t *h) {
 		state->wheur = state->fragments[m];
 		state->wlen = state->fragment_lens[m];
 		state->fragments[m] = NULL;
-		DEBUG_PRINTF("longest fragment: %ls, index: %zu", state->wheur, m);
 	}
 
 	state->blen = wcstombs(NULL, state->wheur, 0);
@@ -254,6 +259,10 @@ inline static int fill_heuristics(parser_state *state, heur_t *h) {
 		return (REG_ESPACE);
 	wcstombs(state->bheur, state->wheur, state->blen);
 	state->bheur[state->blen] = '\0';
+
+	DEBUG_PRINTF("strategy: %s", h->type == HEUR_LONGEST
+	    ? "HEUR_LONGEST" : "HEUR_PREFIX");
+	DEBUG_PRINTF("chosen pattern: %ls", state->wheur);
 
         return frec_proc_literal(h->heur, state->wheur, state->wlen,
 	    state->bheur, state->blen, 0);
@@ -265,12 +274,9 @@ inline static int fill_heuristics(parser_state *state, heur_t *h) {
  * heuristic cannot be constructed.
  */
 #define END_SEGMENT							\
-if (errcode == -1)							\
-	continue;							\
-else if (errcode == REG_OK)						\
-	goto ok;							\
-else									\
+if (errcode != REG_OK)							\
 	goto err;
+
 int
 frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 {
@@ -283,8 +289,6 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 
 	DEBUG_PRINT("enter");
 
-	while (true) {
-
 		/*
 		 * Process the pattern char-by-char.
 		 *
@@ -295,7 +299,7 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 		 * pos: current position (and length) in the temporary space where
 		 *      we copy the current segment
 		 */
-		for (state.procidx = state.curpos; state.procidx < state.len; state.procidx++) {
+		for (state.procidx = 0; state.procidx < state.len; state.procidx++) {
 			switch (state.regex[state.procidx]) {
 
 			/*
@@ -310,7 +314,8 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 				} else {
 					if (parse_brackets(&state) == REG_BADPAT)
 						return REG_BADPAT;
-					errcode = end_segment(&state, true);
+					state.tlen = (state.tlen == -1) ? -1 : state.tlen + 1;
+					errcode = end_segment(&state, false);
 					END_SEGMENT;
 				}
 				continue;
@@ -329,9 +334,9 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 					continue;
 				}
 
-				parse_unit(&state, L'{', L'}');
 				if (state.escaped ^ state.ere) {
 					dec_pos(&state);
+					parse_unit(&state, L'{', L'}');
 					errcode = end_segment(&state, true);
 					END_SEGMENT;
 				} else {
@@ -378,7 +383,7 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 				if (state.escaped || (!state.ere && (state.procidx == 0))) {
 					store_char(&state);
 					continue;
-				} else if (state.procidx != 0) {
+				} else {
 					dec_pos(&state);
 					errcode = end_segment(&state, true);
 					END_SEGMENT;
@@ -448,7 +453,7 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 				} else {
 					state.has_dot = true;
 					state.tlen = (state.tlen == -1) ? -1 : state.tlen + 1;
-					errcode = end_segment(&state, true);
+					errcode = end_segment(&state, false);
 					END_SEGMENT;
 				}
 				continue;
@@ -464,7 +469,7 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 			 */
 			default:
 				if (state.escaped) {
-					if (state.regex[state.procidx] == L'\n') {
+					if (state.regex[state.procidx] == L'n') {
 						state.has_lf = true;
 						store(&state, L'\n');
 						continue;
@@ -479,10 +484,11 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 			}
 		}
 
-		/* We are done with the pattern if we got here. */
-		state.curpos = state.len;
+	if (state.heurpos > 0) {
+		errcode = end_segment(&state, false);
+		END_SEGMENT;
 	}
-ok:
+
 	h->heur = malloc(sizeof(fastmatch_t));
 	if (!h->heur) {
 		errcode = REG_ESPACE;
@@ -494,12 +500,11 @@ ok:
 		goto err;
 
 	errcode = REG_OK;
-	goto finish;
 
 err:
-	if (h->heur)
+	if ((errcode != REG_OK) && (h->heur != NULL))
 		frec_free_fast(h->heur);
-finish:
+
 	free_state(&state);
 	return (errcode);
 }
