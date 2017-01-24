@@ -130,23 +130,101 @@ frec_regfree(frec_t *preg)
 	_dist_regfree(&preg->orig);
 }
 
+typedef struct regexec_state {
+	const void *preg;
+	const void *str;
+	size_t len;
+	size_t nmatch;
+	frec_match_t *pmatch;
+	int eflags;
+	int type;
+
+	size_t slen;
+	size_t offset;
+} regexec_state;
+
+inline static void init_state(regexec_state *state, const void *preg,
+    const void *str, size_t len, size_t nmatch, frec_match_t pmatch[],
+    int eflags, int type)
+{
+
+	state->preg = preg;
+	state->str = str;
+	state->len = len;
+	state->nmatch = nmatch;
+	state->pmatch = pmatch;
+	state->eflags = eflags;
+	state->type = type;
+
+	state->slen = 0;
+	state->offset = 0;
+}
+
+inline static void calc_offsets_pre(regexec_state *state)
+{
+
+	if (state->eflags & REG_STARTEND) {
+		state->slen = state->pmatch[0].m.rm_eo - state->pmatch[0].m.rm_so;
+		state->offset = state->pmatch[0].m.rm_so;
+	} else {
+		if (state->type == STR_WIDE)
+			state->slen = state->len == (size_t)-1
+			    ? wcslen((const wchar_t *)state->str) : state->len;
+		else
+			state->slen = state->len == (size_t)-1
+			    ? strlen((const char *)state->str) : state->len;
+		state->offset = 0;
+	}
+	DEBUG_PRINTF("search offset and length %ld - %ld", state->offset,
+	    state->slen);
+}
+
+inline static void calc_offsets_post(regexec_state *state)
+{
+
+	if (state->eflags & REG_STARTEND)
+		for (size_t i = 0; (!(state->eflags & REG_NOSUB) && (i < state->nmatch)); i++) {
+			state->pmatch[i].m.rm_so += state->offset;
+			state->pmatch[i].m.rm_eo += state->offset;
+			DEBUG_PRINTF("pmatch[%zu] offsets %d - %d", i,
+			    state->pmatch[i].m.rm_so, state->pmatch[i].m.rm_eo);
+		}
+}
+
+inline static int
+_regexec(const void *preg, const void *str, size_t len,
+    size_t nmatch, frec_match_t pmatch[], int eflags, int type, bool multi)
+{
+	regexec_state state;
+	int ret;
+
+	init_state(&state, preg, str, len, nmatch, pmatch, eflags, type);
+	calc_offsets_pre(&state);
+	if (state.pmatch[0].m.rm_so > state.pmatch[0].m.rm_eo)
+		return (REG_NOMATCH);
+	if (multi)
+		ret = frec_mmatch(&((const wchar_t *)state.str)[state.offset],
+		    state.slen, state.type, state.nmatch, state.pmatch,
+		    state.eflags, state.preg);
+	else
+		ret = frec_match(state.preg, &((const char *)state.str)[state.offset],
+		    state.slen, state.type, state.nmatch, state.pmatch,
+		    state.eflags);
+	if (ret == REG_OK)
+		calc_offsets_post(&state);
+	DEBUG_PRINTF("returning %d", ret);
+	return ret;
+
+}
+
 int
 frec_regnexec(const frec_t *preg, const char *str, size_t len,
     size_t nmatch, frec_match_t pmatch[], int eflags)
 {
 	int type = (MB_CUR_MAX == 1) ? STR_BYTE : STR_MBS;
-
-	if (eflags & REG_STARTEND)
-		CALL_WITH_OFFSET(frec_match(preg, &str[offset], slen,
-		    type, nmatch, pmatch, eflags));
-	else {
-		int ret = frec_match(preg, str,
-		    len == (unsigned)-1 ? strlen(str) : len,
-		    type, nmatch, pmatch, eflags);
-		DEBUG_PRINTF("returning %d", ret);
-		return ret;
-	}
+	return _regexec(preg, str, len, nmatch, pmatch, eflags, type, false);
 }
+
 int
 frec_regexec(const frec_t *preg, const char *str,
     size_t nmatch, frec_match_t pmatch[], int eflags)
@@ -164,18 +242,7 @@ int
 frec_regwnexec(const frec_t *preg, const wchar_t *str, size_t len,
     size_t nmatch, frec_match_t pmatch[], int eflags)
 {
-	int type = STR_WIDE;
-
-	if (eflags & REG_STARTEND)
-		CALL_WITH_OFFSET(frec_match(preg, &str[offset], slen,
-		    type, nmatch, pmatch, eflags));
-	else {
-		int ret = frec_match(preg, str,
-		    len == (unsigned)-1 ? wcslen(str) : len,
-		    STR_WIDE, nmatch, pmatch, eflags);
-		DEBUG_PRINTF("returning %d", ret);
-		return ret;
-	}
+	return _regexec(preg, str, len, nmatch, pmatch, eflags, STR_WIDE, false);
 }
 
 int
@@ -337,16 +404,7 @@ frec_mregnexec(const mregex_t *preg, const char *str, size_t len,
     size_t nmatch, frec_match_t pmatch[], int eflags)
 {
 	int type = (MB_CUR_MAX == 1) ? STR_BYTE : STR_MBS;
-
-	if (eflags & REG_STARTEND)
-		CALL_WITH_OFFSET(frec_mmatch(&str[offset], slen, type,
-		    nmatch, pmatch, eflags, preg));
-	else {
-		int ret = frec_mmatch(str, len == (unsigned)-1 ?
-		    strlen(str) : len, type, nmatch, pmatch, eflags, preg);
-		DEBUG_PRINTF("returning %d", ret);
-		return ret;
-	}
+	return _regexec(preg, str, len, nmatch, pmatch, eflags, type, true);
 }
 
 int
@@ -364,17 +422,7 @@ int
 frec_mregwnexec(const mregex_t *preg, const wchar_t *str, size_t len,
     size_t nmatch, frec_match_t pmatch[], int eflags)
 {
-	int type = STR_WIDE;
-
-	if (eflags & REG_STARTEND)
-		CALL_WITH_OFFSET(frec_mmatch(&str[offset], slen, type, nmatch,
-		    pmatch, eflags, preg));
-	else {
-		int ret = frec_mmatch(str, len == (unsigned)-1 ? wcslen(str) : len,
-		    STR_WIDE, nmatch, pmatch, eflags, preg);
-		DEBUG_PRINTF("returning %d", ret);
-		return ret;
-	}
+	return _regexec(preg, str, len, nmatch, pmatch, eflags, STR_WIDE, true);
 }
 
 int
