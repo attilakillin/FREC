@@ -100,7 +100,7 @@ inline static size_t search_lf_backward(matcher_state *state, size_t off) {
 inline static size_t search_lf_forward(matcher_state *state, size_t off) {
 	size_t eo;
 
-	for (eo = state->start + off; state->start + off < state-> len; eo++)
+	for (eo = state->start + off; state->start + off < state->len; eo++)
 		if ((state->type == STR_WIDE) ? (state->data_wide[eo] ==
 		    L'\n') : (state->data_byte[eo] == '\n'))
 			break;
@@ -162,7 +162,7 @@ frec_match_heur(regex_t *preg, heur_t *heur, const void *str,
 			 * look for newlines.
 			 */
 			if (heur->tlen == -1) {
-				so = search_lf_backward(&state, pmatch[0].m.rm_so - 1);
+				so = search_lf_backward(&state, pmatch[0].m.rm_so);
 				eo = search_lf_forward(&state, pmatch[0].m.rm_eo);
 			}
 
