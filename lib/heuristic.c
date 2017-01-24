@@ -44,7 +44,9 @@
  * with a cheaper algorithm and only apply the heavy one to the
  * possibly matching segments. This allows us to benefit from the
  * advantages of an NFA implementation reducing the effect of the
- * performance impact.
+ * performance impact. This file contains the logic to extract
+ * literal fragments and other necessary parameters from a regular
+ * expression so that they can be used in heuristic matching.
  */
 
 typedef struct parser_state {
@@ -139,7 +141,10 @@ inline static void parse_unit(parser_state *state, wchar_t oe, wchar_t ce) {
 	}
 }
 
-inline static int parse_brackets(parser_state *state) {
+/*
+ * Parser sets specified inside the [] tokens.
+ */
+inline static int parse_set(parser_state *state) {
 
 	state->procidx++;
 	if (state->regex[state->procidx] == L'^') {
@@ -157,10 +162,11 @@ inline static int parse_brackets(parser_state *state) {
 }
 
 /*
- * Finishes a segment (fixed-length text fragment).
+ * Finishes a segment and stores the resulting literal fragment.
  */
 inline static int end_segment(parser_state *state, bool varlen) {
 
+	/* Check if matches must start with a literal */
 	if ((state->fragment_no == 0) && (state->heurpos == 0))
 		state->starts_with_literal = false;
 	if (varlen)
@@ -170,7 +176,7 @@ inline static int end_segment(parser_state *state, bool varlen) {
 	if (state->procidx >= state->len && state->heurpos == 0)
 		return (state->fragment_no == 0 ? REG_BADPAT : REG_OK);
 
-	/* Continue if we got some variable-length part */
+	/* Nothing to save in this round; continue */
 	if (state->heurpos == 0)
 		return (REG_OK);
 
@@ -191,6 +197,9 @@ inline static int end_segment(parser_state *state, bool varlen) {
 	return (REG_OK);
 }
 
+/*
+ * Stores current char in the current fragment that is being built.
+ */
 inline static void store_char(parser_state *state) {
 
 	state->heur[state->heurpos++] = state->regex[state->procidx];
@@ -198,6 +207,9 @@ inline static void store_char(parser_state *state) {
 	state->tlen = (state->tlen == -1) ? -1 : state->tlen + 1;
 }
 
+/*
+ * Stores a given char in the current fragment that is being built.
+ */
 inline static void store(parser_state *state, wchar_t c) {
 
         state->heur[state->heurpos++] = c;
@@ -205,11 +217,20 @@ inline static void store(parser_state *state, wchar_t c) {
         state->tlen = (state->tlen == -1) ? -1 : state->tlen + 1;
 }
 
-inline static void dec_pos(parser_state *state) {
+/*
+ * Drop last saved character; invoked after 0..1 and 0..* repetitions
+ * because they make the character that was just saved optional.
+ * Therefore, the char is not saved in the literal.
+ */
+inline static void drop_last_char(parser_state *state) {
 
 	state->heurpos = (state->heurpos == 0) ? 0 : state->heurpos - 1;
 }
 
+/*
+ * Finishes parsing and saves heuristics in the heur_t structure
+ * that is passed.
+ */
 inline static int fill_heuristics(parser_state *state, heur_t *h) {
 
 	h->tlen = state->tlen;
@@ -238,11 +259,12 @@ inline static int fill_heuristics(parser_state *state, heur_t *h) {
 		return (REG_BADPAT);
 
 	if (h->type == HEUR_PREFIX) {
-		/* Save beginning */
+		/* Take first (prefix) literal */
 		state->wheur = state->fragments[0];
 		state->wlen = state->fragment_lens[0];
 		state->fragments[0] = NULL;
 	} else {
+		/* Take longest literal */
 		size_t m = 0;
 
 		for (size_t i = 1; i < state->fragment_no; i++)
@@ -253,6 +275,7 @@ inline static int fill_heuristics(parser_state *state, heur_t *h) {
 		state->fragments[m] = NULL;
 	}
 
+	/* Process chosen literal */
 	state->blen = wcstombs(NULL, state->wheur, 0);
 	state->bheur = malloc(state->blen + 1);
 	if (state->bheur == NULL)
@@ -273,9 +296,6 @@ inline static int fill_heuristics(parser_state *state, heur_t *h) {
  * returns REG_OK if successful or the corresponding error code if a
  * heuristic cannot be constructed.
  */
-#define END_SEGMENT							\
-if (errcode != REG_OK)							\
-	goto err;
 
 int
 frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
@@ -292,18 +312,15 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 		/*
 		 * Process the pattern char-by-char.
 		 *
-		 * i: position in regex
-		 * j: number of fragment
-		 * st: start offset of current segment (fixed-length fragment)
-		 *     to be processed
-		 * pos: current position (and length) in the temporary space where
-		 *      we copy the current segment
+		 * state.procidx: position in regex
+		 * state.heur: buffer for the fragment being extracted
+		 * state.heurpos: buffer position
 		 */
 		for (state.procidx = 0; state.procidx < state.len; state.procidx++) {
 			switch (state.regex[state.procidx]) {
 
 			/*
-			 * Bracketed expression ends the segment or the
+			 * BRE/ERE: Bracketed expression ends the segment or the
 			 * brackets are treated as normal if at least the opening
 			 * bracket is escaped.
 			 */
@@ -312,11 +329,12 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 					store_char(&state);
 					continue;
 				} else {
-					if (parse_brackets(&state) == REG_BADPAT)
+					if (parse_set(&state) == REG_BADPAT)
 						return REG_BADPAT;
 					state.tlen = (state.tlen == -1) ? -1 : state.tlen + 1;
 					errcode = end_segment(&state, false);
-					END_SEGMENT;
+					if (errcode != REG_OK)
+						goto err;
 				}
 				continue;
 
@@ -324,8 +342,11 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 			 * If a repetition marker, erases the repeting character
 			 * and terminates the segment, otherwise treated as a normal
 			 * character.
+			 * BRE: repetition marker if ESCAPED.
+			 * ERE: repetition marker if NOT ESCAPED.
 			 */
 			case L'{':
+				/* Be more permissive at the beginning of the pattern */
 				if (state.escaped && (state.procidx == 1)) {
 					store_char(&state);
 					continue;
@@ -335,10 +356,11 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 				}
 
 				if (state.escaped ^ state.ere) {
-					dec_pos(&state);
+					drop_last_char(&state);
 					parse_unit(&state, L'{', L'}');
 					errcode = end_segment(&state, true);
-					END_SEGMENT;
+					if (errcode != REG_OK)
+						goto err;
 				} else {
 					store_char(&state);
 					continue;
@@ -346,14 +368,17 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 				continue;
 
 			/*
-			 * Terminates the current segment when escaped,
+			 * Terminates the current segment if used for a subexpression,
 			 * otherwise treated as a normal character.
+			 * BRE: subexpression if ESCAPED.
+			 * ERE: subexpression if NOT ESCAPED.
 			 */
 			case L'(':
 				if (state.escaped ^ state.ere) {
 					parse_unit(&state, L'(', L')');
 					errcode = end_segment(&state, true);
-					END_SEGMENT;
+					if (errcode != REG_OK)
+						goto err;
 				} else {
 					store_char(&state);
 					continue;
@@ -380,30 +405,34 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 			 * ERE: Skipped if first character (GNU), rest is like in BRE.
 			 */
 			case L'*':
+				/* Be more permissive at the beginning of the pattern */
 				if (state.escaped || (!state.ere && (state.procidx == 0))) {
 					store_char(&state);
 					continue;
 				} else {
-					dec_pos(&state);
+					drop_last_char(&state);
 					errcode = end_segment(&state, true);
-					END_SEGMENT;
+					if (errcode != REG_OK)
+						goto err;
 				}
 				continue;
 
 			/*
-			 * In BRE, it is a normal character, behavior is undefined
+			 * BRE: it is a normal character, behavior is undefined
 			 * when escaped.
-			 * In ERE, it is special unless escaped. Terminate segment
+			 * ERE: it is special unless escaped. Terminate segment
 			 * when not escaped. Last character is not removed because it
 			 * must occur at least once. It is skipped when first
 			 * character (GNU).
 			 */
 			case L'+':
+				/* Be more permissive at the beginning of the pattern */
 				if (state.ere && (state.procidx == 0))
 					continue;
 				else if (state.ere ^ state.escaped) {
 					errcode = end_segment(&state, true);
-					END_SEGMENT;
+					if (errcode != REG_OK)
+						goto err;
 				} else {
 					store_char(&state);
 					continue;
@@ -411,19 +440,21 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 				continue;
 
 			/*
-			 * In BRE, it is a normal character, behavior is undefined
+			 * BRE: it is a normal character, behavior is undefined
 			 * when escaped.
-			 * In ERE, it is special unless escaped. Terminate segment
+			 * ERE: it is special unless escaped. Terminate segment
 			 * when not escaped. Last character is removed. Skipped when
 			 * first character (GNU).
 			 */
 			case L'?':
+				/* Be more permissive at the beginning of the pattern */
 				if (state.ere && (state.procidx == 0))
 					continue;
 				if (state.ere ^ state.escaped) {
-					dec_pos(&state);
+					drop_last_char(&state);
 					errcode = end_segment(&state, true);
-					END_SEGMENT;
+					if (errcode != REG_OK)
+						goto err;
 				} else {
 					store_char(&state);
 					continue;
@@ -431,13 +462,12 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 				continue;
 
 			/*
-			 * Fail if it is an ERE alternation marker.
+			 * BRE: it is a normal character, behavior is undefined
+			 * when escaped.
+			 * ERE: alternation marker; unsupported.
 			 */
 			case L'|':
-				if (state.ere && !state.escaped) {
-					errcode = REG_BADPAT;
-					goto err;
-				} else if (!state.ere && state.escaped) {
+				if (state.ere ^ state.escaped) {
 					errcode = REG_BADPAT;
 					goto err;
 				} else {
@@ -446,6 +476,10 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 				}
 				continue;
 
+			/*
+			 * BRE/ERE: matches any single character; normal character
+			 * if escaped.
+			 */
 			case L'.':
 				if (state.escaped) {
 					store_char(&state);
@@ -454,9 +488,11 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 					state.has_dot = true;
 					state.tlen = (state.tlen == -1) ? -1 : state.tlen + 1;
 					errcode = end_segment(&state, false);
-					END_SEGMENT;
+					if (errcode != REG_OK)
+						goto err;
 				}
 				continue;
+
 			case L'\n':
 				state.has_lf = true;
 				store_char(&state);
@@ -475,7 +511,8 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 						continue;
 					}
 					errcode = end_segment(&state, true);
-					END_SEGMENT;
+					if (errcode != REG_OK)
+						goto err;
 				} else {
 					store_char(&state);
 					continue;
@@ -486,7 +523,8 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 
 	if (state.heurpos > 0) {
 		errcode = end_segment(&state, false);
-		END_SEGMENT;
+		if (errcode != REG_OK)
+			goto err;
 	}
 
 	h->heur = malloc(sizeof(fastmatch_t));
