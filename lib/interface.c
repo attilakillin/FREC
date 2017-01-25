@@ -200,7 +200,7 @@ _regexec(const void *preg, const void *str, size_t len,
 
 	init_state(&state, preg, str, len, nmatch, pmatch, eflags, type);
 	calc_offsets_pre(&state);
-	if (state.pmatch[0].m.rm_so > state.pmatch[0].m.rm_eo)
+	if ((state.eflags & REG_STARTEND) && (state.pmatch[0].m.rm_so > state.pmatch[0].m.rm_eo))
 		return (REG_NOMATCH);
 	if (multi)
 		ret = frec_mmatch(&((const wchar_t *)state.str)[state.offset],
