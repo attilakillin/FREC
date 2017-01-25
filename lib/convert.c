@@ -106,7 +106,7 @@ frec_convert_pattern_to_mbs(const wchar_t *wregex, size_t n __unused,
 		return (REG_BADPAT);
 
 	mbs = malloc(siz + 1);
-	if (!mbs)
+	if (mbs != NULL)
 		return (REG_ESPACE);
 
 	wcstombs(mbs, wregex, siz);
