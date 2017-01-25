@@ -124,21 +124,21 @@ hashtable_put(hashtable *tbl, const void *key, const void *value)
   if (tbl->entries[hash] == NULL)
     {
       errno = ENOMEM;
-      goto mem1;
+      goto err;
     }
 
   tbl->entries[hash]->key = malloc(tbl->key_size);
   if (tbl->entries[hash]->key == NULL)
     {
       errno = ENOMEM;
-      goto mem2;
+      goto err;
     }
 
   tbl->entries[hash]->value = malloc(tbl->value_size);
   if (tbl->entries[hash]->value == NULL)
     {
       errno = ENOMEM;
-      goto mem3;
+      goto err;
     }
 
   memcpy(tbl->entries[hash]->key, key, tbl->key_size);
@@ -147,11 +147,13 @@ hashtable_put(hashtable *tbl, const void *key, const void *value)
 
   return (HASH_OK);
 
-mem3:
-  free(tbl->entries[hash]->key);
-mem2:
-  free(tbl->entries[hash]);
-mem1:
+err:
+  if (tbl->entries[hash] != NULL)
+    {
+      if (tbl->entries[hash]->key != NULL)
+	free(tbl->entries[hash]->key);
+      free(tbl->entries[hash]);
+    }
   return (HASH_FAIL);
 }
 
@@ -225,11 +227,12 @@ hashtable_free(hashtable *tbl)
   if (tbl == NULL)
     return;
 
-  for (unsigned int i = 0; i < tbl->table_size; i++)
-    if ((tbl->entries[i] != NULL))
+  for (size_t i = 0; i < tbl->table_size; i++)
+    if (tbl->entries[i] != NULL)
       {
 	free(tbl->entries[i]->key);
 	free(tbl->entries[i]->value);
+	free(tbl->entries[i]);
       }
 
   free(tbl->entries);
