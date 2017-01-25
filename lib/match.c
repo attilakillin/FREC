@@ -73,11 +73,11 @@ inline static void init_state(matcher_state *state, regex_t *preg,
 	state->ret = 0;
 }
 
-inline static void fix_offsets(matcher_state *state) {
+inline static void fix_offsets(matcher_state *state, size_t off) {
 
 	for (size_t i = 0; i < state->nmatch; i++) {
-		state->pmatch[i].m.rm_so += state->start;
-		state->pmatch[i].m.rm_eo += state->start;
+		state->pmatch[i].m.rm_so += off;
+		state->pmatch[i].m.rm_eo += off;
 	}
 }
 
@@ -107,7 +107,7 @@ inline static size_t search_lf_forward(matcher_state *state, size_t off) {
 	return eo;
 }
 
-inline static int _regexec(const regex_t *preg, const void *str, size_t len,
+inline static int call_regexec(const regex_t *preg, const void *str, size_t len,
     int type, size_t nmatch, frec_match_t pmatch[], int eflags) {
 	regmatch_t *pm;
 	int ret;
@@ -181,13 +181,13 @@ frec_match_heur(regex_t *preg, heur_t *heur, const void *str,
 			}
 
 			seek_to(&state, so);
-			ret = _regexec(state.preg, state.str, eo - so, state.type, state.nmatch,
+			ret = call_regexec(state.preg, state.str, eo - so, state.type, state.nmatch,
 			    state.pmatch, state.eflags);
 			if (ret == REG_NOMATCH) {
 				state.start = eo;
 				continue;
 			}
-			fix_offsets(&state);
+			fix_offsets(&state, so);
 			return ret;
 		}
 	        return (REG_NOMATCH);
@@ -219,12 +219,12 @@ frec_match_heur(regex_t *preg, heur_t *heur, const void *str,
 				return (REG_NOMATCH);
 
 			seek_to(&state, state.start);
-			ret = _regexec(state.preg, state.str, new_len,
+			ret = call_regexec(state.preg, state.str, new_len,
 			    state.type, state.nmatch, state.pmatch,
 			    state.eflags);
 
 			if (ret == REG_OK)
-				fix_offsets(&state);
+				fix_offsets(&state, state.start);
 			return ret;
 		}
 		return (REG_NOMATCH);
@@ -250,7 +250,7 @@ frec_match(const frec_t *preg, const void *str, size_t len,
 	}
 
 	DEBUG_PRINT("matching with automaton matcher");
-	ret = _regexec(&preg->orig, str, len, type, nmatch, pmatch, eflags);
+	ret = call_regexec(&preg->orig, str, len, type, nmatch, pmatch, eflags);
 	return (ret);
 }
 
