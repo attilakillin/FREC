@@ -1,5 +1,5 @@
 /*-
- * Copyright (C) 2012 Gabor Kovesdan <gabor@FreeBSD.org>
+ * Copyright (C) 2012, 2017 Gabor Kovesdan <gabor@FreeBSD.org>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,13 +35,6 @@
 
 #define WM_B 2
 
-#define ALLOC(var, siz)							\
-var = malloc(siz);							\
-if (!var) {								\
-	ret = REG_ESPACE;						\
-	goto fail;							\
-}
-
 #define FAIL								\
 do {									\
 	ret = REG_BADPAT;						\
@@ -50,11 +43,11 @@ do {									\
 
 static int
 procwm(const void **pat_arr, size_t *siz_arr, size_t nr, size_t chsiz, void *sh, size_t *m, int type)
-{
-	wmentry_t *entry = NULL;
+ {
+        wmentry_t *entry = NULL;
 	wchar_t **warr = (wchar_t **)pat_arr;
 	char **barr = (char **)pat_arr;
-	int ret = REG_OK;
+        int ret = REG_OK;
 
 #define PAT_ARR(i, j)	((type == STR_WIDE) ? (const void *)(&warr[i][j]) \
 			    : (const void *)(&barr[i][j]))
@@ -93,8 +86,8 @@ procwm(const void **pat_arr, size_t *siz_arr, size_t nr, size_t chsiz, void *sh,
 		case HASH_NOTFOUND:
 			entry->shift = shift;
 			entry->suff = 0;
-			entry->pref = 1;
-			entry->pref_list[0] = i;
+			entry->pref = 0;
+			entry->pref_list[entry->pref++] = i;
 			r = hashtable_put(sh, PAT_ARR(i, 0), entry);
 			if (r != HASH_OK)
 				FAIL;
@@ -130,12 +123,13 @@ procwm(const void **pat_arr, size_t *siz_arr, size_t nr, size_t chsiz, void *sh,
 
 		/* Suffix fragment */
 		r = hashtable_get(sh, PAT_ARR(i, *m - WM_B), entry);
+		shift = 0;
 		switch (r) {
 		case HASH_NOTFOUND:
-			entry->shift = shift = 0;
-			entry->suff = 1;
+			entry->shift = 0;
+			entry->suff = 0;
 			entry->pref = 0;
-			entry->suff_list[0] = i;
+			entry->suff_list[entry->suff++] = i;
 			r = hashtable_put(sh, PAT_ARR(i, *m - WM_B), entry);
 			if (r != HASH_OK)
 				FAIL;
@@ -154,23 +148,96 @@ failcomp:
 	return (ret);
 }
 
-#define _SAVE_PATTERNS(src, ss, dst, ds, type)				\
-  do									\
-    {									\
-      ALLOC(dst, sizeof(type *) * nr);					\
-      ALLOC(ds, sizeof(size_t) * nr);					\
-      for (size_t i = 0; i < nr; i++)					\
-	{								\
-	  ALLOC(dst[i], ss[i] * sizeof(type));				\
-	  memcpy(dst[i], src[i], ss[i] * sizeof(type));			\
-	  ds[i] = ss[i];						\
-	}								\
-    } while (0);
+typedef struct wmcomp_state
+{
+	wmsearch_t *wm;
+	size_t nr;
+	const wchar_t **regex;
+	size_t *len;
 
-#define SAVE_PATTERNS							\
-  _SAVE_PATTERNS(bregex, bn, wm->pat, wm->siz, char)
-#define SAVE_PATTERNS_WIDE						\
-  _SAVE_PATTERNS(regex, n, wm->wpat, wm->wsiz, wchar_t)
+	wmentry_t *entry;
+	char **bregex;
+	size_t *blen;
+
+} wmcomp_state;
+
+inline static int init_wmcomp(wmcomp_state *state, wmsearch_t *wm,
+    size_t nr, const wchar_t **regex, size_t *len)
+{
+	state->wm = wm;
+	state->nr = nr;
+	state->regex = regex;
+	state->len = len;
+
+	state->bregex = malloc(sizeof(char *) * state->nr);
+	if (state->bregex == NULL)
+		return (REG_ESPACE);
+	state->blen = malloc(sizeof(size_t) * state->nr);
+	if (state->blen == NULL)
+		return (REG_ESPACE);
+
+	state->wm->wshift = NULL;
+	state->wm->shift = NULL;
+
+	for (size_t i = 0; i < state->nr; i++) {
+		state->blen[i] = wcstombs(NULL, state->regex[i], 0);
+		state->bregex[i] = malloc(state->blen[i] + 1);
+		if (state->bregex[i] == NULL)
+			return (REG_ESPACE);
+		int ret = wcstombs(state->bregex[i], state->regex[i],
+		    state->blen[i]);
+
+		/* Should never happen */
+		if ((size_t)ret == (size_t)-1)
+			return (REG_BADPAT);
+		state->bregex[i][state->blen[i]] = '\0';
+	}
+
+#ifdef WITH_DEBUG
+	for (size_t i = 0; i < state->nr; i++)
+		DEBUG_PRINTF("Wpattern %zu - %ls", i, state->regex[i]);
+
+	for (size_t i = 0; i < state->nr; i++)
+		DEBUG_PRINTF("Pattern %zu - %s", i, state->bregex[i]);
+#endif
+
+	state->wm->pat = state->bregex;
+	state->wm->siz = state->blen;
+	return (REG_OK);
+}
+
+inline static void free_wmcomp(wmcomp_state *state)
+{
+	if (state->bregex != NULL) {
+		for (size_t i = 0; i < state->nr; i++) {
+			if (state->bregex[i] != NULL)
+				free(state->bregex[i]);
+		}
+		free(state->bregex);
+	}
+	if (state->blen != NULL)
+		free(state->blen);
+
+	state->wm->pat = NULL;
+	state->wm->siz = NULL;
+
+	if (state->wm->wshift != NULL)
+		hashtable_free(state->wm->wshift);
+	if (state->wm->shift != NULL)
+		hashtable_free(state->wm->shift);
+}
+
+inline static int procwm_mbs(wmcomp_state *state)
+{
+	return procwm((const void **)state->bregex, state->blen, state->nr, 1,
+	    state->wm->shift, &state->wm->m, STR_BYTE);
+}
+
+inline static int procwm_wide(wmcomp_state *state)
+{
+	return procwm((const void **)state->regex, state->len, state->nr, sizeof(wchar_t),
+	    state->wm->wshift, &state->wm->wm, STR_WIDE);
+}
 
 /*
  * This file implements the Wu-Manber algorithm for pattern matching
@@ -181,95 +248,32 @@ failcomp:
 
 int
 frec_wmcomp(wmsearch_t *wm, size_t nr, const wchar_t **regex,
-	   size_t *n, __unused int cflags)
+	   size_t *len, __unused int cflags)
 {
-  wmentry_t *entry = NULL;
-  int ret = REG_NOMATCH;
-  char **bregex = NULL;
-  size_t *bn = NULL;
+  int ret;
+  wmcomp_state state;
 
   DEBUG_PRINT("enter");
 
-  wm->wshift = NULL;
-  wm->shift = NULL;
-
-  ALLOC(bregex, sizeof(char *) * nr);
-  ALLOC(bn, sizeof(size_t) * nr);
-
-  for (size_t i = 0; i < nr; i++)
-    {
-      bn[i] = wcstombs(NULL, regex[i], 0);
-      ALLOC(bregex[i], bn[i] + 1);
-      ret = wcstombs(bregex[i], regex[i], bn[i]);
-
-      /* Should never happen */
-      if ((size_t)ret == (size_t)-1)
-	{
-	  ret = REG_BADPAT;
-	  goto fail;
-	}
-      bregex[i][bn[i]] = '\0';
-    }
-
-  wm->pat = bregex;
-  wm->siz = bn;
-
-#ifdef WITH_DEBUG
-  for (size_t i = 0; i < nr; i++)
-    DEBUG_PRINTF("Wpattern %zu - %ls", i, regex[i]);
-
-  for (size_t i = 0; i < nr; i++)
-    DEBUG_PRINTF("Pattern %zu - %s", i, bregex[i]);
-#endif
-
-  SAVE_PATTERNS_WIDE;
-//  SAVE_PATTERNS;
-
-  ret = procwm((const void **)regex, n, nr, sizeof(wchar_t), wm->wshift, &wm->wm, STR_WIDE);
-  if (ret != REG_OK)
-    goto fail;
-  ret = procwm((const void **)bregex, bn, nr, 1, wm->shift, &wm->m, STR_BYTE);
+  ret = init_wmcomp(&state, wm, nr, regex, len);
   if (ret != REG_OK)
     goto fail;
 
+  ret = procwm_mbs(&state);
+  if (ret != REG_OK)
+    goto fail;
+  ret = procwm_wide(&state);
+  if (ret != REG_OK)
+    goto fail;
 
-//  for (size_t i = 0; i < nr; i++)
-//    free(bregex[i]);
-//  free(bregex);
-//  free(bn);
+  free_wmcomp(&state);
 
   return REG_OK;
 
 fail:
-  if (bn)
-    free(bn);
-  if (bregex)
-    {
-      for (size_t i = 0; i < nr; i++)
-	free(bregex[i]);
-      free(bregex);
-    }
-  if (wm->wshift)
-    hashtable_free(wm->wshift);
-  if (wm->shift)
-    hashtable_free(wm->shift);
-  if (entry)
-    free(entry);
+  free_wmcomp(&state);
   return ret;
 }
-
-#define MATCH(beg, end, idx)						\
-  do									\
-    {									\
-      if (!(wm->cflags & REG_NOSUB) && (nmatch > 0))			\
-	{								\
-	  pmatch->m.rm_so = beg;					\
-	  pmatch->m.rm_eo = end;					\
-	  pmatch->p = idx;						\
-	}								\
-      ret = REG_OK;							\
-      goto finish;							\
-    } while (0);
 
 int
 frec_wmexec(const wmsearch_t *wm, const void *str, size_t len,
@@ -281,8 +285,6 @@ frec_wmexec(const wmsearch_t *wm, const void *str, size_t len,
 	wchar_t *wstr = (wchar_t *)str;
 	char **barr = (char **)wm->pat;
 	char *bstr = (char *)str;
-	size_t *bsiz = wm->siz;
-	size_t *wsiz = wm->wsiz;
 	size_t defsh = ((type == STR_WIDE) ? wm->wdefsh : wm->defsh);
 	size_t m = ((type == STR_WIDE) ? wm->wm : wm->m);
 	size_t shift;
@@ -291,13 +293,21 @@ frec_wmexec(const wmsearch_t *wm, const void *str, size_t len,
 	void *sh = ((type == STR_WIDE) ? wm->wshift : wm->shift);
 
 #define INPUT(i) ((type == STR_WIDE) ? (void *)&wstr[i] : (void *)&bstr[i])
-#define SIZES ((type == STR_WIDE) ? wsiz : bsiz)
+#define SIZES ((type == STR_WIDE) ? wm->wsiz : wm->siz)
 #define CHSIZ ((type == STR_WIDE) ? sizeof(wchar_t) : 1)
 
 	DEBUG_PRINT("enter");
 
-	ALLOC(s_entry, sizeof(wmentry_t));
-	ALLOC(p_entry, sizeof(wmentry_t));
+	s_entry = malloc(sizeof(wmentry_t));
+	if (s_entry == NULL) {
+		ret = REG_ESPACE;
+		goto fail;
+	}
+	p_entry = malloc(sizeof(wmentry_t));
+	if (p_entry == NULL) {
+		ret = REG_ESPACE;
+		goto fail;
+	}
 
 	while (pos < len) {
 		ret = hashtable_get(sh, INPUT(pos - WM_B), s_entry);
@@ -314,20 +324,24 @@ frec_wmexec(const wmsearch_t *wm, const void *str, size_t len,
 					    (s_entry->suff_list[j] <= p_entry->pref_list[i]); j++)
 						if (s_entry->suff_list[j] == p_entry->pref_list[i]) {
 							size_t idx = s_entry->suff_list[j];
-							size_t k;
 
-							if (len - pos > SIZES[idx] - m) {
-								for (k = WM_B; k < SIZES[idx]; k++)
-									if (memcmp(PAT_ARR(idx, k), INPUT(pos - m + k), CHSIZ) != 0)
-										break;
-								if (k == SIZES[idx])
-									MATCH(pos - m, pos - m + SIZES[idx], idx);
+							if (len - pos >= SIZES[idx] - m) {
+								if (memcmp(PAT_ARR(idx, 0), INPUT(pos - SIZES[idx]), CHSIZ * SIZES[idx])) {
+									if (!(wm->cflags & REG_NOSUB) && (nmatch > 0)) {
+										pmatch->m.rm_so = pos - SIZES[idx];
+										pmatch->m.rm_eo = pos;
+										pmatch->p = idx;
+									}
+									ret = REG_OK;
+									goto finish;
+
+								}
 							}
 						}
 						pos++;
 			}
 		} else
-		pos += shift;
+			pos += shift;
  	}
 fail:
 finish:
@@ -342,24 +356,26 @@ void
 frec_wmfree(wmsearch_t *wm)
 {
 
-  DEBUG_PRINT("enter");
+	DEBUG_PRINT("enter");
+	if (wm->pat != NULL) {
+		for (size_t i = 0; i < wm->n; i++)
+			if (wm->pat[i] != NULL)
+				free(wm->pat[i]);
+		free(wm->pat);
+	}
+	if (wm->siz != NULL)
+		free(wm->siz);
+	if (wm->shift != NULL);
+		hashtable_free(wm->shift);
 
-  if (wm->shift)
-    hashtable_free(wm->shift);
-  for (size_t i = 0; i < wm->n; i++)
-    if (wm->pat[i])
-      free(wm->pat[i]);
-  if (wm->pat)
-    free(wm->pat);
-  if (wm->siz)
-    free(wm->siz);
-  if (wm->wshift)
-    hashtable_free(wm->wshift);
-  for (size_t i = 0; i < wm->wn; i++)
-    if (wm->wpat[i])
-      free(wm->wpat[i]);
-  if (wm->wpat)
-    free(wm->wpat);
-  if (wm->wsiz)
-    free(wm->wsiz);
+	if (wm->wpat != NULL) {
+		for (size_t i = 0; i < wm->n; i++)
+			if (wm->wpat[i] != NULL)
+				free(wm->wpat[i]);
+		free(wm->wpat);
+	}
+	if (wm->wsiz != NULL)
+		free(wm->wsiz);
+	if (wm->wshift != NULL)
+		hashtable_free(wm->wshift);
 }
