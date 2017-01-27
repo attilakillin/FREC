@@ -74,6 +74,8 @@ frec_compile(frec_t *preg, const wchar_t *wregex, size_t wn,
 		preg->heur = NULL;
 	}
 
+	preg->cflags = cflags;
+
 	/* When here, at least NFA surely succeeded. */
 	return (REG_OK);
 }

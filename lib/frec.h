@@ -26,7 +26,8 @@ typedef struct {
 	fastmatch_t *shortcut;
 	heur_t *heur;
 	const char *re_endp;
-	const wchar_t *re_wendp;	
+	const wchar_t *re_wendp;
+	int cflags;
 } frec_t;
 
 #endif

@@ -136,6 +136,7 @@ typedef struct regexec_state {
 	size_t len;
 	size_t nmatch;
 	frec_match_t *pmatch;
+	int cflags;
 	int eflags;
 	int type;
 
@@ -145,7 +146,7 @@ typedef struct regexec_state {
 
 inline static void init_state(regexec_state *state, const void *preg,
     const void *str, size_t len, size_t nmatch, frec_match_t pmatch[],
-    int eflags, int type)
+    int cflags, int eflags, int type)
 {
 
 	state->preg = preg;
@@ -153,6 +154,7 @@ inline static void init_state(regexec_state *state, const void *preg,
 	state->len = len;
 	state->nmatch = nmatch;
 	state->pmatch = pmatch;
+	state->cflags = cflags;
 	state->eflags = eflags;
 	state->type = type;
 
@@ -164,8 +166,8 @@ inline static void calc_offsets_pre(regexec_state *state)
 {
 
 	if (state->eflags & REG_STARTEND) {
-		state->slen = state->pmatch[0].m.rm_eo - state->pmatch[0].m.rm_so;
 		state->offset = state->pmatch[0].m.rm_so;
+		state->slen = state->len - state->offset;
 	} else {
 		if (state->type == STR_WIDE)
 			state->slen = state->len == (size_t)-1
@@ -175,15 +177,15 @@ inline static void calc_offsets_pre(regexec_state *state)
 			    ? strlen((const char *)state->str) : state->len;
 		state->offset = 0;
 	}
-	DEBUG_PRINTF("search offset and length %ld - %ld", state->offset,
-	    state->slen);
+	DEBUG_PRINTF("search offsets %ld - %ld", state->offset,
+	    state->offset + state->slen);
 }
 
 inline static void calc_offsets_post(regexec_state *state)
 {
 
-	if (state->eflags & REG_STARTEND)
-		for (size_t i = 0; (!(state->eflags & REG_NOSUB) && (i < state->nmatch)); i++) {
+	if ((state->eflags & REG_STARTEND) && !(state->cflags & REG_NOSUB))
+		for (size_t i = 0; i < state->nmatch; i++) {
 			state->pmatch[i].m.rm_so += state->offset;
 			state->pmatch[i].m.rm_eo += state->offset;
 			DEBUG_PRINTF("pmatch[%zu] offsets %d - %d", i,
@@ -197,8 +199,10 @@ _regexec(const void *preg, const void *str, size_t len,
 {
 	regexec_state state;
 	int ret;
+	int cflags = multi ? ((const mregex_t *)preg)->cflags
+	    : ((const frec_t *)preg)->cflags;
 
-	init_state(&state, preg, str, len, nmatch, pmatch, eflags, type);
+	init_state(&state, preg, str, len, nmatch, pmatch, cflags, eflags, type);
 	calc_offsets_pre(&state);
 	if ((state.eflags & REG_STARTEND) && (state.pmatch[0].m.rm_so > state.pmatch[0].m.rm_eo))
 		return (REG_NOMATCH);
