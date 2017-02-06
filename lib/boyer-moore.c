@@ -148,42 +148,45 @@ inline static int fill_qsbc_wide(bmcomp_t *state)
 	return (REG_OK);
 }
 
-#define _CALC_BMGS(arr, pat, plen)                                      \
-do {                                                                    \
-        int f = 0, g;                                                   \
-                                                                        \
-        int *suff = malloc(plen * sizeof(int));                         \
-        if (suff == NULL)                                               \
-                return (REG_ESPACE);                                    \
-                                                                        \
-        suff[plen - 1] = plen;                                          \
-        g = plen - 1;                                                   \
-        for (int i = plen - 2; i >= 0; i--) {                           \
-                if (i > g && suff[i + plen - 1 - f] < i - g)            \
-                        suff[i] = suff[i + plen - 1 - f];               \
-                else {                                                  \
-                        if (i < g)                                      \
-                                g = i;                                  \
-                        f = i;                                          \
-                        while (g >= 0 && pat[g] == pat[g + plen - 1 - f])       \
-                                g--;                                    \
-                        suff[i] = f - g;                                \
-                }                                                       \
-        }                                                               \
-                                                                        \
-        for (size_t i = 0; i < plen; i++)                               \
-                arr[i] = plen;                                          \
-        g = 0;                                                          \
-        for (int i = plen - 1; i >= 0; i--)                             \
-                if (suff[i] == i + 1)                                   \
-        for(; (unsigned long)g < plen - 1 - i; g++)                     \
-                if (arr[g] == plen)                                     \
-                        arr[g] = plen - 1 - i;                          \
-        for (size_t i = 0; i <= plen - 2; i++)                          \
-                arr[plen - 1 - suff[i]] = plen - 1 - i;                 \
-                                                                        \
-    free(suff);                                                         \
-} while(0);
+inline static int calc_bmgs(unsigned int bmgs[], const void *pat,
+    size_t chsiz, size_t plen)
+{
+	int f = 0, g;
+	const char *ptr = pat;
+
+	int *suff = malloc(plen * sizeof(int));
+	if (suff == NULL)
+		return (REG_ESPACE);
+
+	suff[plen - 1] = plen;
+	g = plen - 1;
+	for (int i = plen - 2; i >= 0; i--) {
+		if (i > g && suff[i + plen - 1 - f] < i - g)
+			suff[i] = suff[i + plen - 1 - f];
+		else {
+			if (i < g)
+				g = i;
+			f = i;
+			while (g >= 0 && (memcmp(&ptr[g * chsiz], &ptr[(g + plen - 1 - f) * chsiz], chsiz) == 0))
+				g--;
+			suff[i] = f - g;
+		}
+	}
+
+	for (size_t i = 0; i < plen; i++)
+		bmgs[i] = plen;
+	g = 0;
+	for (int i = plen - 1; i >= 0; i--)
+		if (suff[i] == i + 1)
+	for(; (unsigned long)g < plen - 1 - i; g++)
+		if (bmgs[g] == plen)
+			bmgs[g] = plen - 1 - i;
+	for (size_t i = 0; i <= plen - 2; i++)
+		bmgs[plen - 1 - suff[i]] = plen - 1 - i;
+
+	free(suff);
+	return (REG_OK);
+}
 
 /*
  * Fills in the good suffix table.
@@ -192,6 +195,7 @@ inline static int fill_bmgs(bmcomp_t *state, bool wide)
 {
 	char *p;
 	wchar_t *wp;
+	int ret;
 
 	if (wide) {
 		state->fg->sbmGs = malloc(state->fg->len * sizeof(int));
@@ -205,10 +209,11 @@ inline static int fill_bmgs(bmcomp_t *state, bool wide)
 				return (REG_ESPACE);
 			for (size_t i = 0; i < state->fg->wlen; i++)
 				wp[i] = towlower(state->pat[i]);
-			_CALC_BMGS(state->fg->sbmGs, wp, state->fg->wlen);
+			ret = calc_bmgs(state->fg->sbmGs, wp, sizeof(wchar_t), state->fg->wlen);
 			free(wp);
+			return ret;
 		} else
-			_CALC_BMGS(state->fg->sbmGs, state->fg->wpattern, state->fg->wlen);
+			return calc_bmgs(state->fg->sbmGs, state->fg->wpattern, sizeof(wchar_t), state->fg->wlen);
 	} else {
 		state->fg->bmGs = malloc(state->fg->wlen * sizeof(int));
 		if (state->fg->bmGs == NULL)
@@ -217,14 +222,15 @@ inline static int fill_bmgs(bmcomp_t *state, bool wide)
 			state->fg->bmGs[0] = 1;
 		else if (state->fg->icase) {
 			p = malloc(state->fg->len);
-		if (p == NULL)
-			return (REG_ESPACE);
-		for (size_t i = 0; i < state->fg->len; i++)
-			p[i] = tolower(state->pat[i]);
-		_CALC_BMGS(state->fg->bmGs, p, state->fg->len);
-		free(p);
+			if (p == NULL)
+				return (REG_ESPACE);
+			for (size_t i = 0; i < state->fg->len; i++)
+				p[i] = tolower(state->pat[i]);
+			ret = calc_bmgs(state->fg->bmGs, p, 1, state->fg->len);
+			free(p);
+			return ret;
 		} else
-			_CALC_BMGS(state->fg->bmGs, state->fg->pattern, state->fg->len);
+			return calc_bmgs(state->fg->bmGs, state->fg->pattern, 1, state->fg->len);
 	}
 
 	return (REG_OK);
