@@ -560,8 +560,8 @@ typedef struct bmexec_t {
 
 	int mismatch;
 	off_t shift;
-	size_t j; //?
-	unsigned u,v; //?
+	size_t startpos;
+	unsigned prev_factor, curr_factor; // Turbo Boyer-Moore
 } bmexec_t;
 
 inline static void init_bmexec(bmexec_t *state, const fastmatch_t *fg, int type,
@@ -588,43 +588,43 @@ inline static void init_bmexec(bmexec_t *state, const fastmatch_t *fg, int type,
  * so we can handle MB strings as byte sequences just like
  * SB strings.
  */
-inline static void skip_chars(bmexec_t *state, size_t n)
+inline static void seek(bmexec_t *state)
 {
 
 	if (state->type == STR_WIDE)
-		state->startptr = state->wstr + n;
+		state->startptr = state->wstr + state->startpos;
 	else
-		state->startptr = state->str + n;
+		state->startptr = state->str + state->startpos;
 }
 
 inline static void shift_one(bmexec_t *state)
 {
 
 	state->shift = 1;
-	state->j += state->shift;
+	state->startpos += state->shift;
 }
 
 inline static bool bol_match(bmexec_t *state)
 {
 
-	return ((state->j == 0)
-	    || ((state->type == STR_WIDE) ? (state->wstr[state->j - 1] == L'\n')
-	    : (state->str[state->j - 1] == '\n')));
+	return ((state->startpos == 0)
+	    || ((state->type == STR_WIDE) ? (state->wstr[state->startpos - 1] == L'\n')
+	    : (state->str[state->startpos - 1] == '\n')));
 }
 
 inline static bool eol_match(bmexec_t *state)
 {
 	return ((state->type == STR_WIDE)
-	    ? ((state->j + state->fg->wlen == state->wstrlen) || (state->wstr[state->j + state->fg->wlen] == L'\n'))
-	    : ((state->j + state->fg->len == state->strlen) || (state->str[state->j + state->fg->wlen] == '\n')));
+	    ? ((state->startpos + state->fg->wlen == state->wstrlen) || (state->wstr[state->startpos + state->fg->wlen] == L'\n'))
+	    : ((state->startpos + state->fg->len == state->strlen) || (state->str[state->startpos + state->fg->wlen] == '\n')));
 }
 
 inline static bool out_of_bounds(bmexec_t *state)
 {
 
 	return ((state->type == STR_WIDE)
-	    ? ((state->j + state->fg->wlen) > state->wstrlen)
-	    : ((state->j + state->fg->len) > state->strlen));
+	    ? ((state->startpos + state->fg->wlen) > state->wstrlen)
+	    : ((state->startpos + state->fg->len) > state->strlen));
 }
 
 /*
@@ -636,43 +636,36 @@ inline static void shift(bmexec_t *state)
 	int r = -1;
 	unsigned int bc = 0, gs = 0, ts;
 
-	// checkbounds
-
 	if (state->type == STR_WIDE) {
-		if (state->u != 0 && (unsigned)state->mismatch == state->fg->wlen - 1 - state->shift)
-			state->mismatch -= state->u;
-		state->v = state->fg->wlen - 1 - state->mismatch;
+		if (state->prev_factor != 0 && (unsigned)state->mismatch == state->fg->wlen - 1 - state->shift)
+			state->mismatch -= state->prev_factor;
+		state->curr_factor = state->fg->wlen - 1 - state->mismatch;
 		r = hashtable_get(state->fg->qsBc_table,
-		    &state->wstr[(size_t)state->j + state->fg->wlen], &bc);
+		    &state->wstr[(size_t)state->startpos + state->fg->wlen], &bc);
 		gs = state->fg->bmGs[state->mismatch];
 		bc = (r == HASH_OK) ? bc : state->fg->defBc;
 	} else {
-		if (state->u != 0 && (unsigned)state->mismatch == state->fg->len - 1 - state->shift)
-			state->mismatch -= state->u;
-		state->v = state->fg->len - 1 - state->mismatch;
+		if (state->prev_factor != 0 && (unsigned)state->mismatch == state->fg->len - 1 - state->shift)
+			state->mismatch -= state->prev_factor;
+		state->curr_factor = state->fg->len - 1 - state->mismatch;
 		gs = state->fg->sbmGs[state->mismatch];
 		bc = state->fg->qsBc[((const unsigned char *)state->str)
-		    [(size_t)state->j + state->fg->len]];
+		    [(size_t)state->startpos + state->fg->len]];
 	}
 
-	ts = (state->u >= state->v) ? (state->u - state->v) : 0;
+	ts = (state->prev_factor >= state->curr_factor) ? (state->prev_factor - state->curr_factor) : 0;
 	state->shift = MAX(ts, bc);
 	state->shift = MAX(state->shift, gs);
 	if (state->shift == gs)
-		state->u = MIN((state->type == STR_WIDE ? state->fg->wlen : state->fg->len) - state->shift, state->v);
+		state->prev_factor = MIN((state->type == STR_WIDE ? state->fg->wlen : state->fg->len) - state->shift, state->curr_factor);
 	else {
 		if (ts < bc)
-			state->shift = MAX(state->shift, state->u + 1);
-		state->u = 0;
+			state->shift = MAX(state->shift, state->prev_factor + 1);
+		state->prev_factor = 0;
 	}
-	state->j = state->j + state->shift;
+	state->startpos = state->startpos + state->shift;
+	seek(state);
 }
-
-/*
- * Returns:	-(i + 1) on failure (position that it failed with minus sign)
- *		error code on error
- *		REG_OK on success
- */
 
 static inline int
 compare_from_behind(bmexec_t *state)
@@ -682,23 +675,21 @@ compare_from_behind(bmexec_t *state)
 	const wchar_t *str_wide = state->startptr;
 	const wchar_t *pat_wide = state->fg->wpattern;
 	size_t len = (state->type == STR_WIDE) ? state->fg->wlen : state->fg->len;
-	int ret = REG_OK;
 
 	/* Compare the pattern and the input char-by-char from the last position. */
-	for (int i = len - 1; i >= 0; i--) {
+	for (state->mismatch = len - 1; state->mismatch >= 0; state->mismatch--) {
 		if (state->type == STR_WIDE) {
-			if (state->fg->icase ? (towlower(pat_wide[i]) == towlower(str_wide[i]))
-			    : (pat_wide[i] == str_wide[i]))
+			if (state->fg->icase ? (towlower(pat_wide[state->mismatch]) == towlower(str_wide[state->mismatch]))
+			    : (pat_wide[state->mismatch] == str_wide[state->mismatch]))
 				continue;
 		} else {
-			if (state->fg->icase ? (tolower(pat_byte[i]) == tolower(str_byte[i]))
-			    : (pat_byte[i] == str_byte[i]))
+			if (state->fg->icase ? (tolower(pat_byte[state->mismatch]) == tolower(str_byte[state->mismatch]))
+			    : (pat_byte[state->mismatch] == str_byte[state->mismatch]))
 				continue;
 		}
-		ret = -(i + 1);
-		break;
+		return (REG_NOMATCH);
 	}
-	return (ret);
+	return (REG_OK);
 }
 
 /*
@@ -762,7 +753,7 @@ frec_match_fast(const fastmatch_t *fg, const void *data, size_t len,
 	 * can shift one because there can't be a match at the beginning.
 	 */
 	if (fg->bol && (eflags & REG_NOTBOL))
-		state.j = 1;
+		state.startpos = 1;
 
 	/*
 	 * Like above, we cannot have a match at the very end when anchoring to
@@ -780,25 +771,25 @@ frec_match_fast(const fastmatch_t *fg, const void *data, size_t len,
 		if (!((fg->bol && fg->eol) &&
 		    (type == STR_WIDE ? (len != fg->wlen) : (len != fg->len)))) {
 			/* Determine where in data to start search at. */
-			state.j = fg->eol ? len - (type == STR_WIDE ? fg->wlen : fg->len) : 0;
-			skip_chars(&state, state.j);
-			state.mismatch = compare_from_behind(&state);
-			if (state.mismatch == REG_OK) {
+			state.startpos = fg->eol ? len - (type == STR_WIDE ? fg->wlen : fg->len) : 0;
+			seek(&state);
+			ret = compare_from_behind(&state);
+			if (ret == REG_OK) {
 				if (!fg->nosub && nmatch >= 1) {
-					pmatch[0].m.rm_so = state.j;
-					pmatch[0].m.rm_eo = state.j + (type == STR_WIDE ?
+					pmatch[0].m.rm_so = state.startpos;
+					pmatch[0].m.rm_eo = state.startpos + (type == STR_WIDE ?
 					    fg->wlen : fg->len);
 					DEBUG_PRINTF("offsets: %d %d", pmatch[0].m.rm_so,
 					    pmatch[0].m.rm_eo);
 				}
-				return (REG_OK);
 			}
+			return ret;
 		}
 	} else {
 		/* Quick Search / Turbo Boyer-Moore algorithm. */
-		do {
-			skip_chars(&state, state.j);
-			state.mismatch = compare_from_behind(&state);
+		seek(&state);
+		while (!out_of_bounds(&state)) {
+			ret = compare_from_behind(&state);
 			if (state.mismatch == REG_OK) {
 				if (fg->bol) {
 					if (!bol_match(&state)) {
@@ -813,18 +804,17 @@ frec_match_fast(const fastmatch_t *fg, const void *data, size_t len,
 					}
 				}
 				if (!fg->nosub && nmatch >= 1) {
-					pmatch[0].m.rm_so = state.j;
-					pmatch[0].m.rm_eo = state.j + ((type == STR_WIDE) ?
+					pmatch[0].m.rm_so = state.startpos;
+					pmatch[0].m.rm_eo = state.startpos + ((type == STR_WIDE) ?
 					    fg->wlen : fg->len);
 					DEBUG_PRINTF("offsets: %d %d", pmatch[0].m.rm_so,
 					    pmatch[0].m.rm_eo);
 				}
 				return (REG_OK);
-			} else if (state.mismatch > 0)
-				return (state.mismatch);
-			state.mismatch = -state.mismatch - 1;
+			} else
+				return (ret);
 			shift(&state);
-		} while (!out_of_bounds(&state));
+		}
 	}
 	return (ret);
 }
