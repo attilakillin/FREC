@@ -122,27 +122,21 @@ inline static int fill_qsbc_wide(bmcomp_t *state)
 	/* Preprocess pattern. */
 	state->fg->qsBc_table = hashtable_init(state->fg->wlen * (state->fg->icase ? 8 : 4),
 	    sizeof(wchar_t), sizeof(int));
-	if (state->fg->qsBc_table == NULL) {
-		free_comp(state);
+	if (state->fg->qsBc_table == NULL)
 		return (REG_ESPACE);
-	}
 	for (size_t i = 1; i < state->fg->wlen; i++) {
 		int k = state->fg->wlen - i;
 		int r;
 
 		r = hashtable_put(state->fg->qsBc_table, &state->fg->wpattern[i], &k);
-		if ((r == HASH_FAIL) || (r == HASH_FULL)) {
-			free_comp(state);
+		if ((r == HASH_FAIL) || (r == HASH_FULL))
 			return (REG_ESPACE);
-		}
 		if (state->fg->icase) {
 			wchar_t wc = iswlower(state->fg->wpattern[i]) ?
 			    towupper(state->fg->wpattern[i]) : towlower(state->fg->wpattern[i]);
 			r = hashtable_put(state->fg->qsBc_table, &wc, &k);
-			if ((r == HASH_FAIL) || (r == HASH_FULL)) {
-				free_comp(state);
+			if ((r == HASH_FAIL) || (r == HASH_FULL))
 				return (REG_ESPACE);
-			}
 		}
 	}
 	return (REG_OK);
@@ -310,16 +304,12 @@ inline static int check_matchall(bmcomp_t *state, bool literal)
 	if (state->len == 0) {
 		state->fg->matchall = true;
 		state->fg->pattern = malloc(sizeof(char));
-		if (state->fg->pattern == NULL) {
-			free_comp(state);
+		if (state->fg->pattern == NULL)
 			return (REG_ESPACE);
-		}
 		state->fg->pattern[0] = '\0';
 		state->fg->wpattern = malloc(sizeof(wchar_t));
-		if (state->fg->wpattern == NULL) {
-			free_comp(state);
+		if (state->fg->wpattern == NULL)
 			return (REG_ESPACE);
-		}
 		state->fg->wpattern[0] = L'\0';
 		return (REG_MATCHALL);
 	}
