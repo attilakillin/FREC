@@ -705,9 +705,10 @@ frec_match_fast(const fastmatch_t *fg, const void *data, size_t len,
 
 	DEBUG_PRINT("enter");
 	#define FORMAT_BOOL(b) ((b) ? ('y') : ('n'))
-	DEBUG_PRINTF("matchall: %c, nosub: %c, bol: %c, eol: %c",
+	DEBUG_PRINTF("matchall: %c, nosub: %c, bol: %c, eol: %c, icase: %c",
 		FORMAT_BOOL(fg->matchall), FORMAT_BOOL(fg->nosub),
-		FORMAT_BOOL(fg->bol), FORMAT_BOOL(fg->eol));
+		FORMAT_BOOL(fg->bol), FORMAT_BOOL(fg->eol),
+		FORMAT_BOOL(fg->icase));
 
 	/* Calculate length if unspecified. */
 	if (len == (size_t)-1)
@@ -790,7 +791,7 @@ frec_match_fast(const fastmatch_t *fg, const void *data, size_t len,
 		seek(&state);
 		while (!out_of_bounds(&state)) {
 			ret = compare_from_behind(&state);
-			if (state.mismatch == REG_OK) {
+			if (ret == REG_OK) {
 				if (fg->bol) {
 					if (!bol_match(&state)) {
 						shift_one(&state);
@@ -811,8 +812,7 @@ frec_match_fast(const fastmatch_t *fg, const void *data, size_t len,
 					    pmatch[0].m.rm_eo);
 				}
 				return (REG_OK);
-			} else
-				return (ret);
+			}
 			shift(&state);
 		}
 	}
