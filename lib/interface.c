@@ -165,17 +165,17 @@ inline static void init_state(regexec_state *state, const void *preg,
 inline static void calc_offsets_pre(regexec_state *state)
 {
 
+	if (state->type == STR_WIDE)
+		state->slen = (state->len == (unsigned)-1)
+		    ? wcslen((const wchar_t *)state->str) : state->len;
+	else
+		state->slen = (state->len == (unsigned)-1)
+		    ? strlen((const char *)state->str) : state->len;
+	state->offset = 0;
+
 	if (state->eflags & REG_STARTEND) {
-		state->offset = state->pmatch[0].m.rm_so;
-		state->slen = state->len - state->offset;
-	} else {
-		if (state->type == STR_WIDE)
-			state->slen = state->len == (size_t)-1
-			    ? wcslen((const wchar_t *)state->str) : state->len;
-		else
-			state->slen = state->len == (size_t)-1
-			    ? strlen((const char *)state->str) : state->len;
-		state->offset = 0;
+		state->offset += state->pmatch[0].m.rm_so;
+		state->slen -= state->offset;
 	}
 	DEBUG_PRINTF("search offsets %ld - %ld", state->offset,
 	    state->offset + state->slen);
