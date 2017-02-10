@@ -679,13 +679,21 @@ compare_from_behind(bmexec_t *state)
 	/* Compare the pattern and the input char-by-char from the last position. */
 	for (state->mismatch = len - 1; state->mismatch >= 0; state->mismatch--) {
 		if (state->type == STR_WIDE) {
-			if (state->fg->icase ? (towlower(pat_wide[state->mismatch]) == towlower(str_wide[state->mismatch]))
-			    : (pat_wide[state->mismatch] == str_wide[state->mismatch]))
-				continue;
+			if (state->fg->icase) {
+				if (towlower(pat_wide[state->mismatch]) == towlower(str_wide[state->mismatch]))
+					continue;
+			} else {
+				if (pat_wide[state->mismatch] == str_wide[state->mismatch])
+					continue;
+			}
 		} else {
-			if (state->fg->icase ? (tolower(pat_byte[state->mismatch]) == tolower(str_byte[state->mismatch]))
-			    : (pat_byte[state->mismatch] == str_byte[state->mismatch]))
-				continue;
+			if (state->fg->icase) {
+				if (tolower(pat_byte[state->mismatch]) == tolower(str_byte[state->mismatch]))
+					continue;
+			} else {
+				if (pat_byte[state->mismatch] == str_byte[state->mismatch])
+					continue;
+			}
 		}
 		return (REG_NOMATCH);
 	}
@@ -705,8 +713,8 @@ frec_match_fast(const fastmatch_t *fg, const void *data, size_t len,
 
 	DEBUG_PRINT("enter");
 	#define FORMAT_BOOL(b) ((b) ? ('y') : ('n'))
-	DEBUG_PRINTF("matchall: %c, nosub: %c, bol: %c, eol: %c, icase: %c",
-		FORMAT_BOOL(fg->matchall), FORMAT_BOOL(fg->nosub),
+	DEBUG_PRINTF("len: %zu, matchall: %c, nosub: %c, bol: %c, eol: %c, icase: %c",
+		len, FORMAT_BOOL(fg->matchall), FORMAT_BOOL(fg->nosub),
 		FORMAT_BOOL(fg->bol), FORMAT_BOOL(fg->eol),
 		FORMAT_BOOL(fg->icase));
 
