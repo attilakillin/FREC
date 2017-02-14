@@ -3,7 +3,7 @@
 do_benchmark() {
 	case $1 in
 	multi)
-		PROG="env LD_LIBRARY_PATH=../lib ./sgrep/sgrep"
+		PROG="env LD_LIBRARY_PATH=../lib/libfrec ./sgrep/sgrep"
 		;;
 	libc)
 		PROG="./sgrep-libc/sgrep-libc"

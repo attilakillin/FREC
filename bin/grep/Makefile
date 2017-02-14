@@ -7,8 +7,8 @@ SRCS=	file.c grep.c queue.c util.c
 
 CC=	clang
 WARNS?=	6
-CFLAGS+=-I${.CURDIR}/../../lib -I/usr/local/include -ggdb
-LDFLAGS+=-L${.CURDIR}/../../lib
+CFLAGS+=-I${.CURDIR}/../../lib/libfrec -I/usr/local/include -ggdb
+LDFLAGS+=-L${.CURDIR}/../../lib/libfrec
 
 LDADD=	-lz -llzma -lfrec
 DPADD=	${LIBZ} ${LIBLZMA}
