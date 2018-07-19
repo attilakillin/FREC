@@ -7,7 +7,6 @@
 
 #include "config.h"
 #include "hashtable.h"
-#include "frec.h"
 
 typedef struct {
 	regmatch_t m;
