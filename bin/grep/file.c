@@ -31,7 +31,6 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD: user/gabor/tre-integration/usr.bin/grep/file.c 226562 2011-10-20 09:55:21Z gabor $");
 
 #include <sys/param.h>
 #include <sys/mman.h>
@@ -41,14 +40,20 @@ __FBSDID("$FreeBSD: user/gabor/tre-integration/usr.bin/grep/file.c 226562 2011-1
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <lzma.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <wchar.h>
 #include <wctype.h>
+
+#ifndef WITHOUT_GZIP
 #include <zlib.h>
+#endif
+
+#ifndef WITHOUT_LZMA
+#include <lzma.h>
+#endif
 
 #ifndef WITHOUT_BZIP2
 #include <bzlib.h>
@@ -59,8 +64,14 @@ __FBSDID("$FreeBSD: user/gabor/tre-integration/usr.bin/grep/file.c 226562 2011-1
 #define	MAXBUFSIZ	(32 * 1024)
 #define	LNBUFBUMP	80
 
+#ifndef WITHOUT_GZIP
 static gzFile gzbufdesc;
+#endif
+
+#ifndef WITHOUT_LZMA
 static lzma_stream lstrm = LZMA_STREAM_INIT;
+#endif
+
 #ifndef WITHOUT_BZIP2
 static BZFILE* bzbufdesc;
 #endif
@@ -84,8 +95,12 @@ grep_refill(struct file *f)
 	bufpos = buffer;
 	bufrem = 0;
 
-	if (filebehave == FILE_GZIP) {
+	if (false) {
+
+#ifndef WITHOUT_GZIP
+	} else if (filebehave == FILE_GZIP) {
 		nr = gzread(gzbufdesc, buffer, MAXBUFSIZ);
+#endif
 #ifndef WITHOUT_BZIP2
 	} else if (filebehave == FILE_BZIP && bzbufdesc != NULL) {
 		int bzerr;
@@ -116,6 +131,7 @@ grep_refill(struct file *f)
 			nr = -1;
 		}
 #endif
+#ifndef WITHOUT_LZMA
 	} else if ((filebehave == FILE_XZ) || (filebehave == FILE_LZMA)) {
 		lzma_action action = LZMA_RUN;
 		uint8_t in_buf[MAXBUFSIZ];
@@ -146,6 +162,7 @@ grep_refill(struct file *f)
 			return (-1);
 		bufrem = MAXBUFSIZ - lstrm.avail_out;
 		return (0);
+#endif
 	} else
 		nr = read(f->fd, buffer, MAXBUFSIZ);
 
@@ -275,9 +292,11 @@ grep_open(const char *path)
 	if ((buffer == NULL) || (buffer == MAP_FAILED))
 		buffer = grep_malloc(MAXBUFSIZ);
 
+#ifndef WITHOUT_GZIP
 	if (filebehave == FILE_GZIP &&
 	    (gzbufdesc = gzdopen(f->fd, "r")) == NULL)
 		goto error2;
+#endif
 
 #ifndef WITHOUT_BZIP2
 	if (filebehave == FILE_BZIP &&

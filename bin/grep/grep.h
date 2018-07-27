@@ -29,12 +29,18 @@
  * SUCH DAMAGE.
  */
 
-#include <bzlib.h>
 #include <limits.h>
 #include <mregex.h>
 #include <stdbool.h>
 #include <stdio.h>
+
+#ifndef WITHOUT_GZIP
 #include <zlib.h>
+#endif
+
+#ifndef WITHOUT_BZIP2
+#include <bzlib.h>
+#endif
 
 #ifdef WITHOUT_NLS
 #define getstr(n)	 errstr[n]
@@ -43,6 +49,18 @@
 
 extern nl_catd		 catalog;
 #define getstr(n)	 catgets(catalog, 1, n, errstr[n])
+#endif
+
+#ifndef OFF_MAX
+#define OFF_MAX (((((off_t) 1 << (sizeof(off_t) * 8 - 1)) - 1) << 1) + 1)
+#endif
+
+#ifndef MAP_NOCORE
+#define MAP_NOCORE	0
+#endif
+
+#ifndef MAP_NOSYNC
+#define MAP_NOSYNC	0
 #endif
 
 extern const char		*errstr[];

@@ -21,3 +21,12 @@ grep_LDADD+=-llzma
 else
 grep_CPPFLAGS+=-DWITHOUT_LZMA
 endif
+
+if !HAVE_FGETLN
+grep_SOURCES+=fgetln.c
+grep_CPPFLAGS+=-DWITHOUT_FGETLN
+endif
+
+if HAVE_GETPROGNAME
+grep_CPPFLAGS+=-DHAVE_GETPROGNAME
+endif

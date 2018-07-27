@@ -30,7 +30,6 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD: user/gabor/tre-integration/usr.bin/grep/util.c 232224 2012-02-27 16:18:49Z gabor $");
 
 #include <sys/stat.h>
 #include <sys/types.h>
