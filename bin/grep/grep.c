@@ -30,7 +30,6 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD: user/gabor/tre-integration/usr.bin/grep/grep.c 241808 2012-10-21 12:12:22Z gabor $");
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -49,6 +48,15 @@ __FBSDID("$FreeBSD: user/gabor/tre-integration/usr.bin/grep/grep.c 241808 2012-1
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#ifdef WITHOUT_FGETLN
+#include "fgetln.h"
+#endif
+
+#ifndef HAVE_GETPROGNAME
+#define getprogname()	__progname
+char *__progname;
+#endif
 
 #include "grep.h"
 
@@ -328,6 +336,10 @@ main(int argc, char *argv[])
 	unsigned long long l;
 	unsigned int aargc, eargc, i;
 	int c, lastc, needpattern, newarg, prevoptind;
+
+#ifndef HAVE_GETPROGNAME
+	__progname = strdup(argv[0]);
+#endif
 
 	setlocale(LC_ALL, "");
 

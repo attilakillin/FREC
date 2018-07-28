@@ -43,4 +43,12 @@
 #define REG_PEND (_REGEXEC_LAST << 2)
 #endif
 
+#ifndef __unused
+#define __unused
+#endif
+
+#ifndef __DECONST
+#define __DECONST(type, var)	((type)(uintptr_t)(const void *)(var))
+#endif
+
 #endif

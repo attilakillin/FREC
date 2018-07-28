@@ -1,6 +1,7 @@
 #ifndef WU_MANBER_H
 #define WU_MANBER_H 1
 
+#include <stdint.h>
 #include <wchar.h>
 
 #include "frec.h"

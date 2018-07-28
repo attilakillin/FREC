@@ -33,7 +33,6 @@
  */
 
 #include <sys/cdefs.h>
-__FBSDID("$FreeBSD: user/gabor/tre-integration/usr.bin/grep/queue.c 220422 2011-04-07 13:03:35Z gabor $");
 
 #include <sys/param.h>
 #include <sys/queue.h>
