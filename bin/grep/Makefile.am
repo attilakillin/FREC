@@ -30,3 +30,5 @@ endif
 if HAVE_GETPROGNAME
 grep_CPPFLAGS+=-DHAVE_GETPROGNAME
 endif
+
+AM_CFLAGS=-ggdb
