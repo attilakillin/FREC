@@ -26,8 +26,8 @@ AM_CONDITIONAL(WITH_GZIP, [test "$use_gzip" = yes])
 AM_CONDITIONAL(WITH_BZIP2, [test "$use_bzip2" = yes])
 AM_CONDITIONAL(WITH_LZMA, [test "$use_lzma" = yes])
 
-AM_CONDITIONAL(HAVE_FGETLN, [test "have_fgetln" = yes])
-AM_CONDITIONAL(HAVE_GETPROGNAME, [test "have_getprogname" = yes])
+AM_CONDITIONAL(HAVE_FGETLN, [test "$have_fgetln" = yes])
+AM_CONDITIONAL(HAVE_GETPROGNAME, [test "$have_getprogname" = yes])
 
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([Makefile bin/Makefile bin/grep/Makefile lib/Makefile lib/libfrec/Makefile tests/Makefile])
