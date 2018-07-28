@@ -1,0 +1,1 @@
+check_boyer_moore.o: check_boyer_moore.c
