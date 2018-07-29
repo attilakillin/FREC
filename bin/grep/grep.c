@@ -542,6 +542,10 @@ main(int argc, char *argv[])
 			}
 			break;
 		case 'M':
+#ifdef WITHOUT_LZMA
+			errno = EOPNOTSUPP;
+			err(2, "lzma support was disabled at compile-time");
+#endif
 			filebehave = FILE_LZMA;
 			break;
 		case 'n':
@@ -593,9 +597,17 @@ main(int argc, char *argv[])
 			cflags &= ~REG_NOSUB;
 			break;
 		case 'X':
+#ifdef WITHOUT_LZMA
+			errno = EOPNOTSUPP;
+			err(2, "lzma support was disabled at compile-time");
+#endif
 			filebehave = FILE_XZ;
 			break;
 		case 'Z':
+#ifdef WITHOUT_GZIP
+			errno = EOPNOTSUPP;
+			err(2, "bzip2 support was disabled at compile-time");
+#endif
 			filebehave = FILE_GZIP;
 			break;
 		case BIN_OPT:
