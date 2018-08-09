@@ -441,9 +441,9 @@ printline(struct str *line, int sep, frec_match_t *matches, int m)
 			if (color) 
 				fprintf(stdout, "\33[%sm\33[K", color);
 
-				fwrite(line->dat + matches[i].m.rm_so, 
-				    matches[i].m.rm_eo - matches[i].m.rm_so, 1,
-				    stdout);
+			fwrite(line->dat + matches[i].m.rm_so,
+				matches[i].m.rm_eo - matches[i].m.rm_so, 1,
+				stdout);
 			if (color) 
 				fprintf(stdout, "\33[m\33[K");
 			a = matches[i].m.rm_eo;
