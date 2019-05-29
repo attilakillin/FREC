@@ -22,6 +22,11 @@ AC_CHECK_LIB([lzma], [lzma_stream_decoder], [use_lzma=yes])
 AC_CHECK_LIB([c], [fgetln], [have_fgetln=yes])
 AC_CHECK_LIB([c], [getprogname], [have_getprogname=yes])
 
+AC_SEARCH_LIBS([floor], [m])
+AC_SEARCH_LIBS([timer_create], [rt])
+AC_SEARCH_LIBS([pthread_create], [pthread])
+AM_PATH_CHECK([0.9.6], [], [AC_MSG_ERROR([check is missing])])
+
 AM_CONDITIONAL(WITH_GZIP, [test "$use_gzip" = yes])
 AM_CONDITIONAL(WITH_BZIP2, [test "$use_bzip2" = yes])
 AM_CONDITIONAL(WITH_LZMA, [test "$use_lzma" = yes])
