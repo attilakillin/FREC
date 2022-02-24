@@ -14,29 +14,19 @@ PKG_CHECK_MODULES([CHECK], [check >= 0.9.6])
 # Check for required libraries
 AC_CHECK_LIB([tre], [tre_regncomp])
 
+# Check whether file compression functions exist or not and set up #define macros
+AC_CHECK_LIB([bz2], [BZ2_bzRead], [have_bzip2=yes])
+AC_CHECK_LIB([z], [gzread], [have_gzip=yes])
+AC_CHECK_LIB([lzma], [lzma_stream_decoder], [have_lzma=yes])
+AM_CONDITIONAL([WITH_BZIP2], [test $have_bzip2 = yes])
+AM_CONDITIONAL([WITH_GZIP], [test $have_gzip = yes])
+AM_CONDITIONAL([WITH_LZMA], [test $have_lzma = yes])
 
-## vv TODO CHECK WHETHER THESE ARE NECESSARY vv ##
-
-AC_CHECK_LIB([z], [gzread], [use_gzip=yes])
-AC_CHECK_LIB([bz2], [BZ2_bzRead], [use_bzip2=yes])
-AC_CHECK_LIB([lzma], [lzma_stream_decoder], [use_lzma=yes])
-
+# Check whether specific functions exist in the standard library and set up #define macros
 AC_CHECK_LIB([c], [fgetln], [have_fgetln=yes])
 AC_CHECK_LIB([c], [getprogname], [have_getprogname=yes])
-
-AC_SEARCH_LIBS([floor], [m])
-AC_SEARCH_LIBS([timer_create], [rt])
-AC_SEARCH_LIBS([pthread_create], [pthread])
-
-AM_CONDITIONAL(WITH_GZIP, [test "$use_gzip" = yes])
-AM_CONDITIONAL(WITH_BZIP2, [test "$use_bzip2" = yes])
-AM_CONDITIONAL(WITH_LZMA, [test "$use_lzma" = yes])
-
-AM_CONDITIONAL(HAVE_FGETLN, [test "$have_fgetln" = yes])
-AM_CONDITIONAL(HAVE_GETPROGNAME, [test "$have_getprogname" = yes])
-
-## ^^ TODO CHECK WHETHER THESE ARE NECESSARY ^^ ##
-
+AM_CONDITIONAL([HAVE_FGETLN], [test $have_fgetln = yes])
+AM_CONDITIONAL([HAVE_GETPROGNAME], [test $have_getprogname = yes])
 
 # Check for deprecated regex.h header in TRE
 AC_CHECK_HEADERS_ONCE([tre/regex.h])
