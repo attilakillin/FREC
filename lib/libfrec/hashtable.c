@@ -39,14 +39,14 @@
 static uint32_t
 hash32_buf(const void *buf, size_t len, uint32_t hash)
 {
-    const unsigned char *p = buf;
+	const unsigned char *p = buf;
 
-    while (len > 0) {
-        hash = HASHSTEP(hash, *p++);
-        len--;
-    }
+	while (len > 0) {
+		hash = HASHSTEP(hash, *p++);
+		len--;
+	}
 
-    return (hash);
+	return (hash);
 }
 
 /*
@@ -58,27 +58,27 @@ hash32_buf(const void *buf, size_t len, uint32_t hash)
 hashtable *
 hashtable_init(size_t table_size, size_t key_size, size_t value_size)
 {
-    hashtable *tbl;
+	hashtable *tbl;
 
-    tbl = malloc(sizeof(hashtable));
-    if (tbl == NULL) {
-        errno = ENOMEM;
-        return (NULL);
-    }
+	tbl = malloc(sizeof(hashtable));
+	if (tbl == NULL) {
+		errno = ENOMEM;
+		return (NULL);
+	}
 
-    tbl->entries = calloc(sizeof(hashtable_entry *), table_size);
-    if (tbl->entries == NULL) {
-        free(tbl);
-        errno = ENOMEM;
-        return (NULL);
-    }
+	tbl->entries = calloc(sizeof(hashtable_entry *), table_size);
+	if (tbl->entries == NULL) {
+		free(tbl);
+		errno = ENOMEM;
+		return (NULL);
+	}
 
-    tbl->tbl_size = table_size;
-    tbl->key_size = key_size;
-    tbl->val_size = value_size;
-    tbl->usage = 0;
+	tbl->tbl_size = table_size;
+	tbl->key_size = key_size;
+	tbl->val_size = value_size;
+	tbl->usage = 0;
 
-    return (tbl);
+	return (tbl);
 }
 
 /*
@@ -96,49 +96,49 @@ hashtable_init(size_t table_size, size_t key_size, size_t value_size)
 int
 hashtable_put(hashtable *tbl, const void *key, const void *value)
 {
-    if (tbl->tbl_size == tbl->usage) {
-        return (HASH_FULL);
-    }
+	if (tbl->tbl_size == tbl->usage) {
+		return (HASH_FULL);
+	}
 
-    uint32_t hash = hash32_buf(key, tbl->key_size, hash) % tbl->tbl_size;
+	uint32_t hash = hash32_buf(key, tbl->key_size, hash) % tbl->tbl_size;
 
-    /* On hash collision entries are inserted at the next free space */
-    while (tbl->entries[hash] != NULL) {
-        if (memcmp(tbl->entries[hash]->key, key, tbl->key_size) == 0)
-        {
-            memcpy(tbl->entries[hash]->value, value, tbl->val_size);
-            return (HASH_UPDATED);
-        }
+	/* On hash collision entries are inserted at the next free space */
+	while (tbl->entries[hash] != NULL) {
+		if (memcmp(tbl->entries[hash]->key, key, tbl->key_size) == 0)
+		{
+			memcpy(tbl->entries[hash]->value, value, tbl->val_size);
+			return (HASH_UPDATED);
+		}
 
-        hash = (hash + 1) % tbl->tbl_size;
-    }
+		hash = (hash + 1) % tbl->tbl_size;
+	}
 
-    tbl->entries[hash] = malloc(sizeof(hashtable_entry));
-    if (tbl->entries[hash] == NULL) {
-        errno = ENOMEM;
-        return (HASH_FAIL);
-    }
+	tbl->entries[hash] = malloc(sizeof(hashtable_entry));
+	if (tbl->entries[hash] == NULL) {
+		errno = ENOMEM;
+		return (HASH_FAIL);
+	}
 
-    tbl->entries[hash]->key = malloc(tbl->key_size);
-    if (tbl->entries[hash]->key == NULL) {
-        errno = ENOMEM;
-        free(tbl->entries[hash]);
-        return (HASH_FAIL);
-    }
+	tbl->entries[hash]->key = malloc(tbl->key_size);
+	if (tbl->entries[hash]->key == NULL) {
+		errno = ENOMEM;
+		free(tbl->entries[hash]);
+		return (HASH_FAIL);
+	}
 
-    tbl->entries[hash]->value = malloc(tbl->val_size);
-    if (tbl->entries[hash]->value == NULL) {
-        errno = ENOMEM;
-        free(tbl->entries[hash]->key);
-        free(tbl->entries[hash]);
-        return (HASH_FAIL);
-    }
+	tbl->entries[hash]->value = malloc(tbl->val_size);
+	if (tbl->entries[hash]->value == NULL) {
+		errno = ENOMEM;
+		free(tbl->entries[hash]->key);
+		free(tbl->entries[hash]);
+		return (HASH_FAIL);
+	}
 
-    tbl->usage++;
-    memcpy(tbl->entries[hash]->key, key, tbl->key_size);
-    memcpy(tbl->entries[hash]->value, value, tbl->val_size);
+	tbl->usage++;
+	memcpy(tbl->entries[hash]->key, key, tbl->key_size);
+	memcpy(tbl->entries[hash]->value, value, tbl->val_size);
 
-    return (HASH_OK);
+	return (HASH_OK);
 }
 
 /*
@@ -148,17 +148,17 @@ hashtable_put(hashtable *tbl, const void *key, const void *value)
 static hashtable_entry **
 hashtable_lookup(const hashtable *tbl, const void *key)
 {
-    uint32_t hash = hash32_buf(key, tbl->key_size, hash) % tbl->tbl_size;
+	uint32_t hash = hash32_buf(key, tbl->key_size, hash) % tbl->tbl_size;
 
-    while (tbl->entries[hash] != NULL) {
-        if (memcmp(tbl->entries[hash]->key, key, tbl->key_size) == 0) {
-            return (&(tbl->entries[hash]));
-        }
+	while (tbl->entries[hash] != NULL) {
+		if (memcmp(tbl->entries[hash]->key, key, tbl->key_size) == 0) {
+			return (&(tbl->entries[hash]));
+		}
 
-        hash = (hash + 1) % tbl->tbl_size;
-    }
+		hash = (hash + 1) % tbl->tbl_size;
+	}
 
-    return (NULL);
+	return (NULL);
 }
 
 /*
@@ -170,15 +170,15 @@ hashtable_lookup(const hashtable *tbl, const void *key)
 int
 hashtable_get(hashtable *tbl, const void *key, void *value)
 {
-    hashtable_entry **entry_ptr = hashtable_lookup(tbl, key);
-    hashtable_entry *entry = *entry_ptr;
+	hashtable_entry **entry_ptr = hashtable_lookup(tbl, key);
+	hashtable_entry *entry = *entry_ptr;
 
-    if (entry == NULL) {
-        return (HASH_NOTFOUND);
-    }
+	if (entry == NULL) {
+		return (HASH_NOTFOUND);
+	}
 
-    memcpy(value, entry->value, tbl->val_size);
-    return (HASH_OK);
+	memcpy(value, entry->value, tbl->val_size);
+	return (HASH_OK);
 }
 
 /*
@@ -189,21 +189,21 @@ hashtable_get(hashtable *tbl, const void *key, void *value)
 int
 hashtable_remove(hashtable *tbl, const void *key)
 {
-    hashtable_entry **entry_ptr = hashtable_lookup(tbl, key);
-    hashtable_entry *entry = *entry_ptr;
+	hashtable_entry **entry_ptr = hashtable_lookup(tbl, key);
+	hashtable_entry *entry = *entry_ptr;
 
-    if (entry == NULL) {
-        return (HASH_NOTFOUND);
-    }
+	if (entry == NULL) {
+		return (HASH_NOTFOUND);
+	}
 
-    free(entry->key);
-    free(entry->value);
-    free(entry);
+	free(entry->key);
+	free(entry->value);
+	free(entry);
 
-    *entry_ptr = NULL;
-    tbl->usage--;
+	*entry_ptr = NULL;
+	tbl->usage--;
 
-    return (HASH_OK);
+	return (HASH_OK);
 }
 
 /*
@@ -212,20 +212,20 @@ hashtable_remove(hashtable *tbl, const void *key)
 void
 hashtable_free(hashtable *tbl)
 {
-    if (tbl == NULL) {
-        return;
-    }
+	if (tbl == NULL) {
+		return;
+	}
 
-    for (size_t i = 0; i < tbl->tbl_size; i++) {
-        hashtable_entry *entry = tbl->entries[i];
-        if (entry != NULL)
-        {
-            free(entry->key);
-            free(entry->value);
-            free(entry);
-        }
-    }
+	for (size_t i = 0; i < tbl->tbl_size; i++) {
+		hashtable_entry *entry = tbl->entries[i];
+		if (entry != NULL)
+		{
+			free(entry->key);
+			free(entry->value);
+			free(entry);
+		}
+	}
 
-    free(tbl->entries);
-    free(tbl);
+	free(tbl->entries);
+	free(tbl);
 }

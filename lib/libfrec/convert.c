@@ -25,7 +25,6 @@
  */
 
 #include <sys/types.h>
-
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
@@ -33,85 +32,62 @@
 #include "convert.h"
 #include "frec.h"
 
+/*
+ * Converts a string in multibyte representation (mbs) with a length
+ * of mbn to a string with wide character representation (wcs) and a
+ * size of wcn.
+ * Returns REG_OK if the conversion is successful, REG_BADPAT if the
+ * given mbs string is malformed, and REG_ESPACE on memory errors.
+ */
 int
-frec_convert_pattern_to_wcs(const char *regex, size_t n, wchar_t **w,
-    size_t *wn) {
-	wchar_t *wregex;
-	size_t wlen;
-
-	wregex = malloc(sizeof(wchar_t) * (n + 1));
-	if (wregex == NULL)
-		return (REG_ESPACE);
-
-  /* If the current locale uses the standard single byte encoding of
-     characters, we don't do a multibyte string conversion.  If we did,
-     many applications which use the default locale would break since
-     the default "C" locale uses the 7-bit ASCII character set, and
-     all characters with the eighth bit set would be considered invalid. */
-	if (MB_CUR_MAX == 1) {
-		unsigned int i;
-		const unsigned char *str = (const unsigned char *)regex;
-		wchar_t *wstr = wregex;
-
-		for (i = 0; i < n; i++)
-			*(wstr++) = *(str++);
-		wlen = n;
-	} else {
-		int consumed;
-		wchar_t *wcptr = wregex;
-		mbstate_t state;
-		memset(&state, '\0', sizeof(state));
-		while (n > 0) {
-			consumed = mbrtowc(wcptr, regex, n, &state);
-
-			switch (consumed) {
-			case 0:
-				if (*regex == '\0')
-					consumed = 1;
-				else {
-					free(wregex);
-					return (REG_BADPAT);
-				}
-				break;
-			case -1:
-				free(wregex);
-				return (REG_BADPAT);
-			case -2:
-			/* The last character wasn't complete.  Let's not call it a
-			   fatal error. */
-				consumed = n;
-				break;
-			}
-			regex += consumed;
-			n -= consumed;
-			wcptr++;
-		}
-		wlen = wcptr - wregex;
+frec_convert_mbs_to_wcs(
+	const char *mbs, size_t mbn, wchar_t **wcs, size_t *wcn)
+{	
+	/* Check the validity of the multibyte string. */
+	size_t size = mbstowcs(NULL, mbs, 0);
+	if (size == (size_t) - 1) {
+		return (REG_BADPAT);
 	}
 
-	wregex[wlen] = L'\0';
-	*w = wregex;
-	*wn = wlen;
+	wchar_t *result = malloc(sizeof(wchar_t) * (size + 1));
+	if (result == NULL) {
+		return (REG_ESPACE);
+	}
+
+	wcstombs(result, mbs, size);
+	result[size] = '\0';
+
+	*wcs = result;
+	*wcn = size;
 	return (REG_OK);
 }
 
+/*
+ * Converts a string in wide character representation (wcs) with a
+ * length of wcn to a string with multibyte representation (mbs)
+ * and a size of mbn.
+ * Returns REG_OK if the conversion is successful, REG_BADPAT if the
+ * given wcs string is malformed, and REG_ESPACE on memory errors.
+ */
 int
-frec_convert_pattern_to_mbs(const wchar_t *wregex, size_t n __unused,
-    char **s, size_t *sn) {
-	size_t siz;
-	char *mbs;
-
-	siz = wcstombs(NULL, wregex, 0);
-	if (siz == (size_t)-1)
+frec_convert_wcs_to_mbs(
+	const wchar_t *wcs, size_t wcn, char **mbs, size_t *mbn)
+{
+	/* Check the validity of the wide char string. */
+	size_t size = wcstombs(NULL, wcs, 0);
+	if (size == (size_t) - 1) {
 		return (REG_BADPAT);
+	}
 
-	mbs = malloc(siz + 1);
-	if (mbs != NULL)
+	char *result = malloc(size + 1);
+	if (result == NULL) {
 		return (REG_ESPACE);
+	}
 
-	wcstombs(mbs, wregex, siz);
-	mbs[siz] = '\0';
-	*s = mbs;
-	*sn = siz;
+	wcstombs(result, wcs, size);
+	result[size] = '\0';
+
+	*mbs = result;
+	*mbn = size;
 	return (REG_OK);
 }

@@ -15,23 +15,23 @@
 
 typedef struct
 {
-    void *key;
-    void *value;
+	void *key;                  /* Pointer to an entry key. */
+	void *value;                /* Pointer to an entry value. */
 } hashtable_entry;
 
 typedef struct
 {
-    size_t tbl_size;
-    size_t key_size;
-    size_t val_size;
-    size_t usage;
-    hashtable_entry **entries;
+	size_t tbl_size;            /* Max entry count of the table. */
+	size_t key_size;            /* Size of an entry key. */
+	size_t val_size;            /* Size of an entry value. */
+	size_t usage;               /* Number of entries in use. */
+	hashtable_entry **entries;  /* Array of entry pointers. */
 } hashtable;
 
-void hashtable_free(hashtable *);
-int hashtable_get(hashtable *, const void *, void *);
 hashtable *hashtable_init(size_t, size_t, size_t);
 int hashtable_put(hashtable *, const void *, const void *);
+int hashtable_get(hashtable *, const void *, void *);
 int hashtable_remove(hashtable *, const void *);
+void hashtable_free(hashtable *);
 
-#endif /* HASHTABLE.H */
+#endif /* HASHTABLE_H */
