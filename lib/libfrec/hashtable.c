@@ -76,7 +76,6 @@ hashtable_init(size_t table_size, size_t key_size, size_t value_size)
 	tbl->tbl_size = table_size;
 	tbl->key_size = key_size;
 	tbl->val_size = value_size;
-	tbl->usage = 0;
 
 	return (tbl);
 }
@@ -96,13 +95,10 @@ hashtable_init(size_t table_size, size_t key_size, size_t value_size)
 int
 hashtable_put(hashtable *tbl, const void *key, const void *value)
 {
-	if (tbl->tbl_size == tbl->usage) {
-		return (HASH_FULL);
-	}
-
 	uint32_t hash = hash32_buf(key, tbl->key_size, hash) % tbl->tbl_size;
+	uint32_t initial_hash = hash;
 
-	/* On hash collision entries are inserted at the next free space */
+	/* On hash collision entries are inserted at the next free space. */
 	while (tbl->entries[hash] != NULL) {
 		if (memcmp(tbl->entries[hash]->key, key, tbl->key_size) == 0)
 		{
@@ -111,6 +107,11 @@ hashtable_put(hashtable *tbl, const void *key, const void *value)
 		}
 
 		hash = (hash + 1) % tbl->tbl_size;
+
+		/* This means the table is full, and the key isn't present. */
+		if (hash == initial_hash) {
+			return (HASH_FULL);
+		}
 	}
 
 	tbl->entries[hash] = malloc(sizeof(hashtable_entry));
@@ -134,7 +135,6 @@ hashtable_put(hashtable *tbl, const void *key, const void *value)
 		return (HASH_FAIL);
 	}
 
-	tbl->usage++;
 	memcpy(tbl->entries[hash]->key, key, tbl->key_size);
 	memcpy(tbl->entries[hash]->value, value, tbl->val_size);
 
@@ -149,6 +149,7 @@ static hashtable_entry **
 hashtable_lookup(const hashtable *tbl, const void *key)
 {
 	uint32_t hash = hash32_buf(key, tbl->key_size, hash) % tbl->tbl_size;
+	uint32_t initial_hash = hash;
 
 	while (tbl->entries[hash] != NULL) {
 		if (memcmp(tbl->entries[hash]->key, key, tbl->key_size) == 0) {
@@ -156,6 +157,11 @@ hashtable_lookup(const hashtable *tbl, const void *key)
 		}
 
 		hash = (hash + 1) % tbl->tbl_size;
+
+		/* This means the table is full, and the key isn't present. */
+		if (hash == initial_hash) {
+			return (NULL);
+		}
 	}
 
 	return (NULL);
@@ -201,8 +207,6 @@ hashtable_remove(hashtable *tbl, const void *key)
 	free(entry);
 
 	*entry_ptr = NULL;
-	tbl->usage--;
-
 	return (HASH_OK);
 }
 

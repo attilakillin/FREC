@@ -54,7 +54,7 @@ frec_convert_mbs_to_wcs(
 		return (REG_ESPACE);
 	}
 
-	wcstombs(result, mbs, size);
+	mbstowcs(result, mbs, size);
 	result[size] = '\0';
 
 	*wcs = result;
@@ -79,7 +79,7 @@ frec_convert_wcs_to_mbs(
 		return (REG_BADPAT);
 	}
 
-	char *result = malloc(size + 1);
+	char *result = malloc(sizeof(char) * (size + 1));
 	if (result == NULL) {
 		return (REG_ESPACE);
 	}

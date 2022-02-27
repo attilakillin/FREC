@@ -24,7 +24,6 @@ typedef struct
 	size_t tbl_size;            /* Max entry count of the table. */
 	size_t key_size;            /* Size of an entry key. */
 	size_t val_size;            /* Size of an entry value. */
-	size_t usage;               /* Number of entries in use. */
 	hashtable_entry **entries;  /* Array of entry pointers. */
 } hashtable;
 

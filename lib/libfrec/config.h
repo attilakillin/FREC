@@ -20,35 +20,35 @@
 #define REG_OK 0
 
 #ifndef REG_LITERAL
-#define REG_LITERAL REG_NOSPEC
+    #define REG_LITERAL REG_NOSPEC
 #endif
 
 #define _REGCOMP_LAST REG_UNGREEDY
 
 #ifndef REG_WORD
-#define REG_WORD (_REGCOMP_LAST << 1)
+    #define REG_WORD (_REGCOMP_LAST << 1)
 #endif
 
 #ifndef REG_GNU
-#define REG_GNU (_REGCOMP_LAST << 2)
+    #define REG_GNU (_REGCOMP_LAST << 2)
 #endif
 
 #define _REGEXEC_LAST REG_BACKTRACKING_MATCHER
 
 #ifndef REG_STARTEND
-#define REG_STARTEND (_REGEXEC_LAST << 1)
+    #define REG_STARTEND (_REGEXEC_LAST << 1)
 #endif
 
 #ifndef REG_PEND
-#define REG_PEND (_REGEXEC_LAST << 2)
+    #define REG_PEND (_REGEXEC_LAST << 2)
 #endif
 
 #ifndef __unused
-#define __unused
+    #define __unused
 #endif
 
 #ifndef __DECONST
-#define __DECONST(type, var)	((type)(uintptr_t)(const void *)(var))
+    #define __DECONST(type, var)	((type)(uintptr_t)(const void *)(var))
 #endif
 
 #endif
