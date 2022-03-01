@@ -81,16 +81,11 @@ hashtable_init(size_t table_size, size_t key_size, size_t value_size)
 }
 
 /*
- * Places the key-value pair to the hashtable tbl.
- * Returns:
- *   HASH_OK:		if the key was not present in the hash table yet
- *			        but the kay-value pair has been successfully added.
- *   HASH_UPDATED:	if the value for the key has been updated with the
- *			        new value.
- *   HASH_FULL:		if the hash table is full and the entry could not
- *			        be added.
- *   HASH_FAIL:		if an error has occurred and errno has been set to
- *			        indicate the error.
+ * Places the given key-value pair to the hashtable tbl. Returns:
+ *     HASH_OK:      if key was newly added to the table with value.
+ *     HASH_UPDATED: if key was present, and has been updated with value.
+ *     HASH_FULL:	 if the table is full and the entry couldn't be added.
+ *     HASH_FAIL:	 if a memory error occurred.
  */
 int
 hashtable_put(hashtable *tbl, const void *key, const void *value)
