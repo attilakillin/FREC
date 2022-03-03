@@ -47,7 +47,7 @@ frec_regncomp(frec_t *preg, const char *regex, size_t n, int cflags)
 
 	DEBUG_PRINT("enter");
 
-	ret = frec_convert_pattern_to_wcs(regex, n, &wregex, &wlen);
+	ret = frec_convert_mbs_to_wcs(regex, n, &wregex, &wlen);
 	if (ret != REG_OK) {
 		DEBUG_PRINTF("returning %d", ret);
 		return (ret);
@@ -84,7 +84,7 @@ frec_regwncomp(frec_t *preg, const wchar_t *regex, size_t n, int cflags)
 
 	DEBUG_PRINT("enter");
 
-	ret = frec_convert_pattern_to_mbs(regex, n, &sregex, &slen);
+	ret = frec_convert_wcs_to_mbs(regex, n, &sregex, &slen);
 	if (ret != REG_OK) {
 		DEBUG_PRINTF("returning %d", ret);
 		return (ret);
@@ -281,7 +281,7 @@ frec_mregncomp(mregex_t *preg, size_t nr, const char **regex,
 		goto err;
 
 	for (i = 0; i < nr; i++) {
-		ret = frec_convert_pattern_to_wcs(regex[i], n[i], &wregex[i], &wlen[i]);
+		ret = frec_convert_mbs_to_wcs(regex[i], n[i], &wregex[i], &wlen[i]);
 		if (ret != REG_OK)
 			goto err;
 	}
@@ -347,7 +347,7 @@ frec_mregwncomp(mregex_t *preg, size_t nr, const wchar_t **regex,
 		goto err;
 
 	for (i = 0; i < nr; i++) {
-		ret = frec_convert_pattern_to_mbs(regex[i], n[i], &sregex[i], &slen[i]);
+		ret = frec_convert_wcs_to_mbs(regex[i], n[i], &sregex[i], &slen[i]);
 		if (ret != REG_OK)
 			goto err;
 	}

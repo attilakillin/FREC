@@ -32,19 +32,21 @@
 #include "hashtable.h"
 
 /*
- * Return a 32-bit hash of the given buffer.  The init
- * value should be 0, or the previous hash value to extend
+ * Returns a 32-bit hash of the given buffer with the given length.
+ * The init value should be 0, or the previous hash value to extend
  * the previous hash.
  */
 static uint32_t
 hash32_buf(const void *buf, size_t len, uint32_t hash)
 {
-  const unsigned char *p = buf;
+	const unsigned char *p = buf;
 
-  while (len--)
-    hash = HASHSTEP(hash, *p++);
+	while (len > 0) {
+		hash = HASHSTEP(hash, *p++);
+		len--;
+	}
 
-  return hash;
+	return (hash);
 }
 
 /*
@@ -53,127 +55,111 @@ hash32_buf(const void *buf, size_t len, uint32_t hash)
  * bytes. On successful allocation returns a pointer to the hash table.
  * Otherwise, returns NULL and sets errno to indicate the error.
  */
-hashtable
-*hashtable_init(size_t table_size, size_t key_size, size_t value_size)
+hashtable *
+hashtable_init(size_t table_size, size_t key_size, size_t value_size)
 {
-  hashtable *tbl;
+	hashtable *tbl;
 
-  tbl = malloc(sizeof(hashtable));
-  if (tbl == NULL)
-    goto mem1;
+	tbl = malloc(sizeof(hashtable));
+	if (tbl == NULL) {
+		errno = ENOMEM;
+		return (NULL);
+	}
 
-  tbl->entries = calloc(sizeof(hashtable_entry *), table_size);
-  if (tbl->entries == NULL)
-    goto mem2;
+	tbl->entries = calloc(sizeof(hashtable_entry *), table_size);
+	if (tbl->entries == NULL) {
+		free(tbl);
+		errno = ENOMEM;
+		return (NULL);
+	}
 
-  tbl->table_size = table_size;
-  tbl->usage = 0;
-  tbl->key_size = key_size;
-  tbl->value_size = value_size;
+	tbl->tbl_size = table_size;
+	tbl->key_size = key_size;
+	tbl->val_size = value_size;
 
-  return (tbl);
-
-mem2:
-  free(tbl);
-mem1:
-  errno = ENOMEM;
-  return (NULL);
+	return (tbl);
 }
 
 /*
- * Places the key-value pair to the hashtable tbl.
- * Returns:
- *   HASH_OK:		if the key was not present in the hash table yet
- *			but the kay-value pair has been successfully added.
- *   HASH_UPDATED:	if the value for the key has been updated with the
- *			new value.
- *   HASH_FULL:		if the hash table is full and the entry could not
- *			be added.
- *   HASH_FAIL:		if an error has occurred and errno has been set to
- *			indicate the error.
+ * Places the given key-value pair to the hashtable tbl. Returns:
+ *     HASH_OK:      if key was newly added to the table with value.
+ *     HASH_UPDATED: if key was present, and has been updated with value.
+ *     HASH_FULL:	 if the table is full and the entry couldn't be added.
+ *     HASH_FAIL:	 if a memory error occurred.
  */
 int
 hashtable_put(hashtable *tbl, const void *key, const void *value)
 {
-  uint32_t hash = 0;
+	uint32_t hash = hash32_buf(key, tbl->key_size, hash) % tbl->tbl_size;
+	uint32_t initial_hash = hash;
 
-  if (tbl->table_size == tbl->usage)
-  	return (HASH_FULL);
+	/* On hash collision entries are inserted at the next free space. */
+	while (tbl->entries[hash] != NULL) {
+		if (memcmp(tbl->entries[hash]->key, key, tbl->key_size) == 0)
+		{
+			memcpy(tbl->entries[hash]->value, value, tbl->val_size);
+			return (HASH_UPDATED);
+		}
 
-  hash = hash32_buf(key, tbl->key_size, hash) % tbl->table_size;
+		hash = (hash + 1) % tbl->tbl_size;
 
-  /*
-   * On hash collision entries are inserted at the next free space,
-   * so we have to increase the index until we either find an entry
-   * with the same key (and update it) or we find a free space.
-   */
-  for(;;)
-    {
-      if (tbl->entries[hash] == NULL)
-	break;
-      else if (memcmp(tbl->entries[hash]->key, key, tbl->key_size) == 0)
-	{
-	  memcpy(tbl->entries[hash]->value, value, tbl->value_size);
-	  return (HASH_UPDATED);
+		/* This means the table is full, and the key isn't present. */
+		if (hash == initial_hash) {
+			return (HASH_FULL);
+		}
 	}
-      if (++hash == tbl->table_size)
-	hash = 0;
-    }
 
-  tbl->entries[hash] = malloc(sizeof(hashtable_entry));
-  if (tbl->entries[hash] == NULL)
-    {
-      errno = ENOMEM;
-      goto err;
-    }
+	tbl->entries[hash] = malloc(sizeof(hashtable_entry));
+	if (tbl->entries[hash] == NULL) {
+		errno = ENOMEM;
+		return (HASH_FAIL);
+	}
 
-  tbl->entries[hash]->key = malloc(tbl->key_size);
-  if (tbl->entries[hash]->key == NULL)
-    {
-      errno = ENOMEM;
-      goto err;
-    }
+	tbl->entries[hash]->key = malloc(tbl->key_size);
+	if (tbl->entries[hash]->key == NULL) {
+		errno = ENOMEM;
+		free(tbl->entries[hash]);
+		return (HASH_FAIL);
+	}
 
-  tbl->entries[hash]->value = malloc(tbl->value_size);
-  if (tbl->entries[hash]->value == NULL)
-    {
-      errno = ENOMEM;
-      goto err;
-    }
+	tbl->entries[hash]->value = malloc(tbl->val_size);
+	if (tbl->entries[hash]->value == NULL) {
+		errno = ENOMEM;
+		free(tbl->entries[hash]->key);
+		free(tbl->entries[hash]);
+		return (HASH_FAIL);
+	}
 
-  memcpy(tbl->entries[hash]->key, key, tbl->key_size);
-  memcpy(tbl->entries[hash]->value, value, tbl->value_size);
-  tbl->usage++;
+	memcpy(tbl->entries[hash]->key, key, tbl->key_size);
+	memcpy(tbl->entries[hash]->value, value, tbl->val_size);
 
-  return (HASH_OK);
-
-err:
-  if (tbl->entries[hash] != NULL)
-    {
-      if (tbl->entries[hash]->key != NULL)
-	free(tbl->entries[hash]->key);
-      free(tbl->entries[hash]);
-    }
-  return (HASH_FAIL);
+	return (HASH_OK);
 }
 
-static hashtable_entry
-**hashtable_lookup(const hashtable *tbl, const void *key)
+/*
+ * Returns a pointer to the hashtable_entry pointer with the given key,
+ * or NULL, if no such entry is found.
+ */
+static hashtable_entry **
+hashtable_lookup(const hashtable *tbl, const void *key)
 {
-  uint32_t hash = 0;
+	uint32_t hash = hash32_buf(key, tbl->key_size, hash) % tbl->tbl_size;
+	uint32_t initial_hash = hash;
 
-  hash = hash32_buf(key, tbl->key_size, hash) % tbl->table_size;
+	while (tbl->entries[hash] != NULL) {
+		if (memcmp(tbl->entries[hash]->key, key, tbl->key_size) == 0) {
+			return (&(tbl->entries[hash]));
+		}
 
-  for (;;)
-    {
-      if (tbl->entries[hash] == NULL)
+		hash = (hash + 1) % tbl->tbl_size;
+
+		/* This means the table is full, and the key isn't present. */
+		if (hash == initial_hash) {
+			return (NULL);
+		}
+	}
+
 	return (NULL);
-      else if (memcmp(key, tbl->entries[hash]->key, tbl->key_size) == 0)
-	  return (&tbl->entries[hash]);
-
-      if (++hash == tbl->table_size)
-	hash = 0;
-    }
 }
 
 /*
@@ -185,14 +171,15 @@ static hashtable_entry
 int
 hashtable_get(hashtable *tbl, const void *key, void *value)
 {
-  hashtable_entry **entry;
+	hashtable_entry **entry_ptr = hashtable_lookup(tbl, key);
+	hashtable_entry *entry = *entry_ptr;
 
-  entry = hashtable_lookup(tbl, key);
-  if (entry == NULL)
-      return (HASH_NOTFOUND);
+	if (entry == NULL) {
+		return (HASH_NOTFOUND);
+	}
 
-  memcpy(value, (*entry)->value, tbl->value_size);
-  return (HASH_OK);
+	memcpy(value, entry->value, tbl->val_size);
+	return (HASH_OK);
 }
 
 /*
@@ -203,19 +190,19 @@ hashtable_get(hashtable *tbl, const void *key, void *value)
 int
 hashtable_remove(hashtable *tbl, const void *key)
 {
-  hashtable_entry **entry;
+	hashtable_entry **entry_ptr = hashtable_lookup(tbl, key);
+	hashtable_entry *entry = *entry_ptr;
 
-  entry = hashtable_lookup(tbl, key);
-  if (entry == NULL)
-      return (HASH_NOTFOUND);
+	if (entry == NULL) {
+		return (HASH_NOTFOUND);
+	}
 
-  free((*entry)->key);
-  free((*entry)->value);
-  free(*entry);
-  *entry = NULL;
+	free(entry->key);
+	free(entry->value);
+	free(entry);
 
-  tbl->usage--;
-  return (HASH_OK);
+	*entry_ptr = NULL;
+	return (HASH_OK);
 }
 
 /*
@@ -224,16 +211,20 @@ hashtable_remove(hashtable *tbl, const void *key)
 void
 hashtable_free(hashtable *tbl)
 {
-  if (tbl == NULL)
-    return;
+	if (tbl == NULL) {
+		return;
+	}
 
-  for (size_t i = 0; i < tbl->table_size; i++)
-    if (tbl->entries[i] != NULL)
-      {
-	free(tbl->entries[i]->key);
-	free(tbl->entries[i]->value);
-	free(tbl->entries[i]);
-      }
+	for (size_t i = 0; i < tbl->tbl_size; i++) {
+		hashtable_entry *entry = tbl->entries[i];
+		if (entry != NULL)
+		{
+			free(entry->key);
+			free(entry->value);
+			free(entry);
+		}
+	}
 
-  free(tbl->entries);
+	free(tbl->entries);
+	free(tbl);
 }

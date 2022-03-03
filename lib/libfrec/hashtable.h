@@ -5,31 +5,32 @@
 
 #include <sys/types.h>
 
-#define HASH_OK         0
-#define HASH_UPDATED    1
-#define HASH_FAIL       2
-#define HASH_FULL       3
-#define HASH_NOTFOUND   4
+#define HASH_OK 0
+#define HASH_UPDATED 1
+#define HASH_FAIL 2
+#define HASH_FULL 3
+#define HASH_NOTFOUND 4
 
-#define HASHSTEP(x,c) (((x << 5) + x) + (c))
+#define HASHSTEP(x, c) (((x << 5) + x) + (c))
 
-typedef struct {
-  void *key;
-  void *value;
+typedef struct
+{
+	void *key;                  /* Pointer to an entry key. */
+	void *value;                /* Pointer to an entry value. */
 } hashtable_entry;
 
-typedef struct {
-  size_t key_size;
-  size_t table_size;
-  size_t usage;
-  size_t value_size;
-  hashtable_entry **entries;
+typedef struct
+{
+	size_t tbl_size;            /* Max entry count of the table. */
+	size_t key_size;            /* Size of an entry key. */
+	size_t val_size;            /* Size of an entry value. */
+	hashtable_entry **entries;  /* Array of entry pointers. */
 } hashtable;
 
-void hashtable_free(hashtable *);
-int hashtable_get(hashtable *, const void *, void *);
 hashtable *hashtable_init(size_t, size_t, size_t);
 int hashtable_put(hashtable *, const void *, const void *);
+int hashtable_get(hashtable *, const void *, void *);
 int hashtable_remove(hashtable *, const void *);
+void hashtable_free(hashtable *);
 
-#endif	/* HASHTABLE.H */
+#endif /* HASHTABLE_H */
