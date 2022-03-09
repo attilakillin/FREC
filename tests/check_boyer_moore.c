@@ -35,12 +35,17 @@
 
 START_TEST(test_boyer_moore_compile)
 {
-	fastmatch_t fm;
+	/*fastmatch_t fm;
 	wchar_t *wpat = L"something";
 	char *pat = "something";
 	int ret;
 
-	ret = frec_proc_literal(&fm, wpat, wcslen(wpat), pat, strlen(pat), 0);
+	ret = frec_proc_literal(&fm, wpat, wcslen(wpat), pat, strlen(pat), 0);*/
+
+	bm_preproc_t result;
+	wchar_t *pattern = L"something";
+
+	int ret = bm_preprocess_literal(&result, pattern, wcslen(pattern), 0);
 
 	ck_assert(ret == REG_OK);
 }
@@ -48,25 +53,21 @@ END_TEST
 
 START_TEST(test_proc_fast_compile_fails_when_pattern_has_square_brackets_basic)
 {
-	fastmatch_t fm;
-	char *pat = "[ap]rint";
-	wchar_t *wpat = L"[ap]rint";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"[ap]rint";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), 0);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), 0);
 
-	ck_assert(ret==REG_BADPAT);
+	ck_assert(ret == REG_BADPAT);
 }
 END_TEST
 
 START_TEST(test_proc_fast_compile_fails_when_pattern_has_square_brackets_ext)
 {
-	fastmatch_t fm;
-	char *pat = "[ap]rint";
-	wchar_t *wpat = L"[ap]rint";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"[ap]rint";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), REG_EXTENDED);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), REG_EXTENDED);
 
 	ck_assert(ret == REG_BADPAT);
 }
@@ -74,51 +75,43 @@ END_TEST
 
 START_TEST(test_proc_fast_compile_fails_when_pattern_has_asterix_basic)
 {
-	fastmatch_t fm;
-	char *pat = "p*int";
-	wchar_t *wpat= L"p*int";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"p*int";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), 0);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), 0);
 
-	ck_assert(ret==REG_BADPAT);
+	ck_assert(ret == REG_BADPAT);
 }
 END_TEST
 
 START_TEST(test_proc_fast_compile_fails_when_pattern_has_asterix_ext)
 {
-	fastmatch_t fm;
-	char *pat = "*rint";
-	wchar_t *wpat = L"*rint";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"*rint";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), REG_EXTENDED);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), REG_EXTENDED);
 
-	ck_assert(ret==REG_BADPAT);
+	ck_assert(ret == REG_BADPAT);
 }
 END_TEST
 
 START_TEST(test_proc_fast_compile_fails_when_pattern_has_round_brackets_basic)
 {
-	fastmatch_t fm;
-	char *pat = "print\\(ln\\)";
-	wchar_t *wpat = L"print\\(ln\\)";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"print\\(ln\\)";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), 0);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), 0);
 
-	ck_assert(ret==REG_BADPAT);
+	ck_assert(ret == REG_BADPAT);
 }
 END_TEST
 
 START_TEST(test_proc_fast_compile_fails_when_pattern_has_round_brackets_ext)
 {
-	fastmatch_t fm;
-	char *pat = "print(ln)";
-	wchar_t *wpat = L"print(ln)";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"print(ln)";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), REG_EXTENDED);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), REG_EXTENDED);
 
 	ck_assert(ret == REG_BADPAT);
 }
@@ -126,12 +119,10 @@ END_TEST
 
 START_TEST(test_proc_fast_compile_fails_when_pattern_has_dot_basic)
 {
-	fastmatch_t fm;
-	char *pat= "prin.";
-	wchar_t *wpat =L"prin.";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"prin.";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), 0);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), 0);
 
 	ck_assert(ret == REG_BADPAT);
 }
@@ -139,12 +130,10 @@ END_TEST
 
 START_TEST(test_proc_fast_compile_fails_when_pattern_has_dot_ext)
 {
-	fastmatch_t fm;
-	char *pat = "prin.";
-	wchar_t *wpat = L"prin.";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"prin.";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), REG_EXTENDED);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), REG_EXTENDED);
 
 	ck_assert(ret == REG_BADPAT);
 }
@@ -152,12 +141,10 @@ END_TEST
 
 START_TEST(test_proc_fast_compile_fails_when_pattern_has_vertical_bar_ext)
 {
-	fastmatch_t fm;
-	char *pat = "print|prnt";
-	wchar_t *wpat = L"print|prnt";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"print|prnt";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), REG_EXTENDED);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), REG_EXTENDED);
 
 	ck_assert(ret == REG_BADPAT);
 }
@@ -165,66 +152,21 @@ END_TEST
 
 START_TEST(test_proc_fast_compile_fails_when_pattern_has_plus_sign_ext)
 {
-	fastmatch_t fm;
-	char *pat = "er+or";
-	wchar_t *wpat = L"er+or";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"pr+nt";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), REG_EXTENDED);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), REG_EXTENDED);
 
 	ck_assert(ret == REG_BADPAT);
 }
 END_TEST
-
-/*
-START_TEST(test_boyer_moore_badpat_7_ext)
-{
-	fastmatch_t fm;
-	char *pat = "[pP]rint";
-	wchar_t *wpat = L"[pP]rint";
-	int ret;
-
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), REG_EXTENDED);
-
-	ck_assert(ret == REG_BADPAT);
-}
-END_TEST
-
-START_TEST(test_boyer_moore_badpat_7_basic)
-{
-	fastmatch_t fm;
-	char *pat = "[pP]rint";
-	wchar_t *wpat = L"[pP]rint";
-	int ret;
-
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), 0);
-
-	ck_assert(ret == REG_BADPAT);
-}
-END_TEST
-*/
 
 START_TEST(test_proc_fast_compile_fails_when_pattern_has_question_mark_ext)
 {
-	fastmatch_t fm;
-	char *pat = "pri?nt";
-	wchar_t *wpat = L"pri?nt";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"pri?nt";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), REG_EXTENDED);
-
-	ck_assert(ret == REG_BADPAT);
-}
-END_TEST
-
-START_TEST(test_proc_fast_compile_fails_when_pattern_has_braces_ext)
-{
-	fastmatch_t fm;
-	char *pat = "print{1,2}";
-	wchar_t *wpat = L"print{1,2}";
-	int ret;
-
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), REG_EXTENDED);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), REG_EXTENDED);
 
 	ck_assert(ret == REG_BADPAT);
 }
@@ -232,12 +174,21 @@ END_TEST
 
 START_TEST(test_proc_fast_compile_fails_when_pattern_has_braces_basic)
 {
-	fastmatch_t fm;
-	char *pat = "print\\{1,2\\}";
-	wchar_t *wpat = L"print\\{1,2\\}";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"print\\{1,2\\}";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), 0);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), 0);
+
+	ck_assert(ret == REG_BADPAT);
+}
+END_TEST
+
+START_TEST(test_proc_fast_compile_fails_when_pattern_has_braces_ext)
+{
+	bm_preproc_t result;
+	wchar_t *pattern = L"print{1,2}";
+
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), REG_EXTENDED);
 
 	ck_assert(ret == REG_BADPAT);
 }
@@ -245,12 +196,10 @@ END_TEST
 
 START_TEST(test_proc_fast_compile_ok_when_pattern_has_escaped_square_brackets_basic)
 {
-	fastmatch_t fm;
-	char *pat = "\\[pP]rint";
-	wchar_t *wpat = L"\\[pP]rint";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"\\[pP]rint";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), 0);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), 0);
 
 	ck_assert(ret == REG_OK);
 }
@@ -258,25 +207,10 @@ END_TEST
 
 START_TEST(test_proc_fast_compile_ok_when_pattern_has_escaped_square_brackets_ext)
 {
-	fastmatch_t fm;
-	char *pat = "\\[pP]rint";
-	wchar_t *wpat = L"\\[pP]rint";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"\\[pP]rint";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), REG_EXTENDED);
-	
-	ck_assert(ret == REG_OK);
-}
-END_TEST
-
-START_TEST(test_proc_fast_compile_ok_when_pattern_has_escaped_dot_ext)
-{
-	fastmatch_t fm;
-	char *pat = "\\.rint";
-	wchar_t *wpat = L"\\.rint";
-	int ret;
-
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), REG_EXTENDED);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), REG_EXTENDED);
 
 	ck_assert(ret == REG_OK);
 }
@@ -284,12 +218,21 @@ END_TEST
 
 START_TEST(test_proc_fast_compile_ok_when_pattern_has_escaped_dot_basic)
 {
-	fastmatch_t fm;
-	char *pat = "\\.rint";
-	wchar_t *wpat = L"\\.rint";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"\\.rint";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), 0);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), 0);
+
+	ck_assert(ret == REG_OK);
+}
+END_TEST
+
+START_TEST(test_proc_fast_compile_ok_when_pattern_has_escaped_dot_ext)
+{
+	bm_preproc_t result;
+	wchar_t *pattern = L"\\.rint";
+
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), REG_EXTENDED);
 
 	ck_assert(ret == REG_OK);
 }
@@ -297,12 +240,10 @@ END_TEST
 
 START_TEST(test_proc_fast_compile_ok_when_pattern_has_escaped_asterix_basic)
 {
-	fastmatch_t fm;
-	char *pat = "\\*rint";
-	wchar_t *wpat = L"\\*rint";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"\\*rint";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), 0);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), 0);
 
 	ck_assert(ret == REG_OK);
 }
@@ -310,12 +251,10 @@ END_TEST
 
 START_TEST(test_proc_fast_compile_ok_when_pattern_has_escaped_asterix_ext)
 {
-	fastmatch_t fm;
-	char *pat = "\\*rint";
-	wchar_t *wpat = L"\\*rint";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"\\*rint";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), REG_EXTENDED);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), REG_EXTENDED);
 
 	ck_assert(ret == REG_OK);
 }
@@ -323,12 +262,10 @@ END_TEST
 
 START_TEST(test_proc_fast_compile_ok_when_pattern_has_escaped_question_mark_ext)
 {
-	fastmatch_t fm;
-	char *pat = "prin\\?t";
-	wchar_t *wpat = L"prin\\?t";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"prin\\?t";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), REG_EXTENDED);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), REG_EXTENDED);
 
 	ck_assert(ret == REG_OK);
 }
@@ -336,12 +273,10 @@ END_TEST
 
 START_TEST(test_proc_fast_compile_ok_when_pattern_has_escaped_plus_sign_ext)
 {
-	fastmatch_t fm;
-	char *pat = "pri\\+nt";
-	wchar_t *wpat = L"pri\\+nt";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"pri\\+nt";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), REG_EXTENDED);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), REG_EXTENDED);
 
 	ck_assert(ret == REG_OK);
 }
@@ -349,12 +284,10 @@ END_TEST
 
 START_TEST(test_proc_fast_compile_ok_when_pattern_has_escaped_vertical_bar_ext)
 {
-	fastmatch_t fm;
-	char *pat = "print\\|prnt";
-	wchar_t *wpat = L"print\\|prnt";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"print\\|prnt";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), REG_EXTENDED);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), REG_EXTENDED);
 
 	ck_assert(ret == REG_OK);
 }
@@ -362,12 +295,10 @@ END_TEST
 
 START_TEST(test_proc_fast_compile_ok_when_pattern_has_escaped_braces_ext)
 {
-	fastmatch_t fm;
-	char *pat = "print\\{1,2}";
-	wchar_t *wpat = L"print\\{1,2}";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"print\\{1,2}";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), REG_EXTENDED);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), REG_EXTENDED);
 
 	ck_assert(ret == REG_OK);
 }
@@ -375,12 +306,10 @@ END_TEST
 
 START_TEST(test_proc_fast_compile_ok_when_pattern_has_escaped_braces_basic)
 {
-	fastmatch_t fm;
-	char *pat = "print{1,2}";
-	wchar_t *wpat = L"print{1,2}";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"print{1,2}";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), 0);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), 0);
 
 	ck_assert(ret == REG_OK);
 }
@@ -388,12 +317,10 @@ END_TEST
 
 START_TEST(test_proc_fast_compile_ok_when_pattern_has_escaped_round_brackets_basic)
 {
-	fastmatch_t fm;
-	char *pat = "print(ln)";
-	wchar_t *wpat = L"print(ln)";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"print(ln)";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), 0);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), 0);
 
 	ck_assert(ret == REG_OK);
 }
@@ -401,12 +328,10 @@ END_TEST
 
 START_TEST(test_proc_fast_compile_ok_when_pattern_has_escaped_round_brackets_ext)
 {
-	fastmatch_t fm;
-	char *pat = "print\\(ln)";
-	wchar_t *wpat = L"print\\(ln)";
-	int ret;
+	bm_preproc_t result;
+	wchar_t *pattern = L"print\\(ln)";
 
-	ret = frec_proc_fast(&fm, wpat, wcslen(wpat), pat, strlen(pat), REG_EXTENDED);
+	int ret = bm_preprocess_full(&result, pattern, wcslen(pattern), REG_EXTENDED);
 
 	ck_assert(ret == REG_OK);
 }
