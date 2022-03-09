@@ -24,10 +24,14 @@
  * SUCH DAMAGE.
  */
 
+#include <ctype.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <string.h>
+#include <wctype.h>
 
 #include "boyer-moore.h"
+#include "convert.h"
 
 static int
 fill_badc_shifts_stnd(bm_preproc_ct *stnd, bool ignore_case)
@@ -227,6 +231,7 @@ bm_preprocess_literal(
 	result->f_wholewords = cflags & REG_WORD;
 	result->f_newline = cflags & REG_NEWLINE;
 	result->f_nosub = cflags & REG_NOSUB;
+	result->f_matchall = false;
 
 	if (len == 0) {
 		result->wide.pattern = malloc(sizeof(wchar_t) * 1);
@@ -243,6 +248,8 @@ bm_preprocess_literal(
 		}
 		result->stnd.pattern[0] = '\0';
 		result->stnd.len = 0;
+
+		result->f_matchall = true;
 		return (REG_OK);
 	}
 
@@ -256,7 +263,8 @@ bm_preprocess_literal(
 	if (result->wide.pattern == NULL) {
 		return (REG_ESPACE);
 	}
-	memcpy(result->wide.pattern, pattern, sizeof(wchar_t) * (len + 1)); // TODO Might cause issue
+	memcpy(result->wide.pattern, pattern, sizeof(wchar_t) * len);
+	result->wide.pattern[len] = L'\0'; /* Ensure terminating null character. */
 	result->wide.len = len;
 
 	int ret;
@@ -347,22 +355,8 @@ strip_specials(
 				return (REG_BADPAT);
 			}
 			break;
-		case '*':
-			if (escaped || !(in_flags & REG_EXTENDED)) {
-				out_pat[pos] = c;
-				escaped = false;
-				pos++;
-			} else {
-				// TODO FREE
-				return (REG_BADPAT);
-			}
-			break;
-		case L'+':
-		case L'?':
-			if ((in_flags & REG_EXTENDED) && i == 0) {
-				continue;
-			}
-			if (!escaped ^ (in_flags & REG_EXTENDED)) {
+		case L'*':
+			if (escaped) {
 				out_pat[pos] = c;
 				escaped = false;
 				pos++;
@@ -385,19 +379,12 @@ strip_specials(
 				pos++;
 			}
 			break;
+		case L'+':
+		case L'?':
 		case L'|':
 		case L'(':
-			if (escaped ^ (in_flags & REG_EXTENDED)) {
-				// TODO FREE
-				return (REG_BADPAT);
-			} else {
-				out_pat[pos] = c;
-				escaped = false;
-				pos++;
-			}
-			break;
 		case L'{':
-			if ((escaped ^ !(in_flags & REG_EXTENDED)) || i == 0) {
+			if (escaped ^ !(in_flags & REG_EXTENDED)) {
 				out_pat[pos] = c;
 				escaped = false;
 				pos++;
@@ -412,14 +399,15 @@ strip_specials(
 				return (REG_BADPAT);
 			} else {
 				out_pat[pos] = c;
-				escaped = false;
 				pos++;
 			}
 			break;
 		}
 	}
 
+	out_pat[pos] = L'\0';
 	*out_len = pos;
+
 	return (REG_OK);
 }
 
@@ -427,7 +415,7 @@ int
 bm_preprocess_full(
 	bm_preproc_t *result, wchar_t *pattern, size_t len, int cflags)
 {
-	wchar_t *clean_pattern = malloc(sizeof(wchar_t) * len);
+	wchar_t *clean_pattern = malloc(sizeof(wchar_t) * (len + 1));
 	if (clean_pattern == NULL) {
 		return (REG_ESPACE);
 	}
@@ -438,6 +426,7 @@ bm_preprocess_full(
 		// TODO FREE
 		return (REG_BADPAT);
 	}
+
 	ret = bm_preprocess_literal(result, clean_pattern, clean_len, cflags);
 	if (ret != REG_OK) {
 		// TODO FREE

@@ -45,11 +45,12 @@ typedef struct {
 
 	bool f_linebegin;
 	bool f_lineend;
+	bool f_matchall;
 
 	bool f_wholewords;
 	bool f_ignorecase;
-	bool f_newline; // No idea
-	bool f_nosub; // No idea
+	bool f_newline;
+	bool f_nosub;
 } bm_preproc_t;
 
 
@@ -94,6 +95,15 @@ int bm_preprocess_literal(
 	bm_preproc_t *result, wchar_t *pattern, size_t len, int cflags);
 int bm_preprocess_full(
 	bm_preproc_t *result, wchar_t *pattern, size_t len, int cflags);
+
+int bm_execute_stnd(
+    bm_match_t result[], size_t nmatch,
+    bm_preproc_t *prep, const char *text, size_t len,
+    bool no_bol_anchor, bool no_eol_anchor);
+int bm_execute_wide(
+    bm_match_t result[], size_t nmatch,
+    bm_preproc_t *prep, const wchar_t *text, size_t len,
+    bool no_bol_anchor, bool no_eol_anchor);
 
 int	frec_proc_literal(fastmatch_t *, const wchar_t *, size_t,
 		const char *, size_t, int);
