@@ -53,7 +53,7 @@ static int
 exec_turbo_bm_stnd(
     bm_match_t result[], size_t nmatch,
     bm_preproc_t *prep, const char *text, size_t len,
-    bool match_bol, bool match_eol, bool store_matches)
+    bool store_matches)
 {
     int res_cnt = 0; /* A new match will be written to this index of result. */
 
@@ -79,8 +79,8 @@ exec_turbo_bm_stnd(
         /* If i < 0, the whole pattern matched with the text,
          * if not, there was a mismatch and we can shift the search. */
         if (i < 0) {
-            if ((!match_bol || bol_matches_stnd(text, srch_pos)) &&
-                (!match_eol || eol_matches_stnd(text, len, srch_pos + pat_len)) &&
+            if ((!prep->f_linebegin || bol_matches_stnd(text, srch_pos)) &&
+                (!prep->f_lineend || eol_matches_stnd(text, len, srch_pos + pat_len)) &&
                 store_matches) {
                 result[res_cnt].soffset = srch_pos;
                 result[res_cnt].eoffset = srch_pos + pat_len;
@@ -88,7 +88,7 @@ exec_turbo_bm_stnd(
             }
 
             /* If nmatch was 0, or we found the required match amount, return. */
-            if (nmatch == 0 || res_cnt > nmatch) {
+            if (res_cnt >= nmatch) {
                 return (REG_OK);
             }
             
@@ -122,7 +122,7 @@ static int
 exec_turbo_bm_wide(
     bm_match_t result[], size_t nmatch,
     bm_preproc_t *prep, const wchar_t *text, size_t len,
-    bool match_bol, bool match_eol, bool store_matches)
+    bool store_matches)
 {
     int res_cnt = 0; /* A new match will be written to this index of result. */
 
@@ -148,8 +148,8 @@ exec_turbo_bm_wide(
         /* If i < 0, the whole pattern matched with the text,
          * if not, there was a mismatch and we can shift the search. */
         if (i < 0) {
-            if ((!match_bol || bol_matches_wide(text, srch_pos)) &&
-                (!match_eol || eol_matches_wide(text, len, srch_pos + pat_len)) &&
+            if ((!prep->f_linebegin || bol_matches_wide(text, srch_pos)) &&
+                (!prep->f_lineend || eol_matches_wide(text, len, srch_pos + pat_len)) &&
                 store_matches) {
                 result[res_cnt].soffset = srch_pos;
                 result[res_cnt].eoffset = srch_pos + pat_len;
@@ -157,7 +157,7 @@ exec_turbo_bm_wide(
             }
 
             /* If nmatch was 0, or we found the required match amount, return. */
-            if (nmatch == 0 || res_cnt > nmatch) {
+            if (res_cnt >= nmatch) {
                 return (REG_OK);
             }
             
@@ -228,8 +228,7 @@ bm_execute_stnd(
         return (REG_NOMATCH);
     }
 
-    return exec_turbo_bm_stnd(result, nmatch, prep, text, len,
-        prep->f_linebegin, prep->f_lineend, store_matches);
+    return exec_turbo_bm_stnd(result, nmatch, prep, text, len, store_matches);
 }
 
 int
@@ -268,6 +267,5 @@ bm_execute_wide(
         return (REG_NOMATCH);
     }
 
-    return exec_turbo_bm_wide(result, nmatch, prep, text, len,
-        prep->f_linebegin, prep->f_lineend, store_matches);
+    return exec_turbo_bm_wide(result, nmatch, prep, text, len, store_matches);
 }

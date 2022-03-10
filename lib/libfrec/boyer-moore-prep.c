@@ -232,6 +232,8 @@ bm_preprocess_literal(
 	result->f_newline = cflags & REG_NEWLINE;
 	result->f_nosub = cflags & REG_NOSUB;
 	result->f_matchall = false;
+	result->f_linebegin = false;
+	result->f_lineend = false;
 
 	if (len == 0) {
 		result->wide.pattern = malloc(sizeof(wchar_t) * 1);
