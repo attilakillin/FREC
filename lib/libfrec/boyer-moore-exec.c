@@ -30,25 +30,48 @@
 
 #include "boyer-moore.h"
 
+/* Utility functions. */
 static int max(int a, int b) { return (a > b) ? a : b; }
 static int min(int a, int b) { return (a < b) ? a : b; }
 
+/*
+ * Returns whether the character before the given position is a
+ * beginning-of-line character. Standard character version.
+ */
 static bool bol_matches_stnd(const char *text, size_t start_pos) {
     return start_pos == 0 || text[start_pos - 1] == '\n';
 }
+/*
+ * Returns whether the character before the given position is a
+ * beginning-of-line character. Wide character version.
+ */
 static bool bol_matches_wide(const wchar_t *text, size_t start_pos) {
     return start_pos == 0 || text[start_pos - 1] == L'\n';
 }
 
+/*
+ * Returns whether the character at the given position is an
+ * end-of-line character. Standard character version.
+ */
 static bool eol_matches_stnd(const char *text, size_t text_len, size_t end_pos) {
     return end_pos == text_len || text[end_pos] == '\n';
 }
+/*
+ * Returns whether the character at the given position is an
+ * end-of-line character. Wide character version.
+ */
 static bool eol_matches_wide(const wchar_t *text, size_t text_len, size_t end_pos) {
     return end_pos == text_len || text[end_pos] == L'\n';
 }
 
 // TODO Not properly configured for case ignoring
 
+/*
+ * Executes the turbo Boyer-Moore algorithm on the given text with the given
+ * length, and stores at most nmatch number of results in the given result
+ * array. Will not store matches if that flag is set.
+ *
+ */
 static int
 exec_turbo_bm_stnd(
     bm_match_t result[], size_t nmatch,

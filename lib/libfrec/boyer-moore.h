@@ -91,6 +91,8 @@ typedef struct {
 	bool reversed;
 } fastmatch_t;
 
+bm_preproc_t *bm_create_preproc();
+void bm_free_preproc(bm_preproc_t *prep);
 int bm_preprocess_literal(
 	bm_preproc_t *result, wchar_t *pattern, size_t len, int cflags);
 int bm_preprocess_full(

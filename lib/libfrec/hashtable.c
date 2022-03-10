@@ -207,6 +207,8 @@ hashtable_remove(hashtable *tbl, const void *key)
 
 /*
  * Frees the resources associated with the hash table tbl.
+ * This includes the table itself, as the hashtable_init function
+ * allocates heap memory for that too.
  */
 void
 hashtable_free(hashtable *tbl)
@@ -215,16 +217,18 @@ hashtable_free(hashtable *tbl)
 		return;
 	}
 
-	for (size_t i = 0; i < tbl->tbl_size; i++) {
-		hashtable_entry *entry = tbl->entries[i];
-		if (entry != NULL)
-		{
-			free(entry->key);
-			free(entry->value);
-			free(entry);
+	if (tbl->entries != NULL) {
+		for (size_t i = 0; i < tbl->tbl_size; i++) {
+			hashtable_entry *entry = tbl->entries[i];
+			if (entry != NULL)
+			{
+				free(entry->key);
+				free(entry->value);
+				free(entry);
+			}
 		}
-	}
 
-	free(tbl->entries);
+		free(tbl->entries);
+	}
 	free(tbl);
 }

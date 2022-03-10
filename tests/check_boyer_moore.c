@@ -44,9 +44,10 @@
 #define BM_TEST_PREP_LIT(name, pattern, flags, expected_return)				\
 	START_TEST(name)								\
 	{												\
-		bm_preproc_t prep;							\
+		bm_preproc_t* prep = bm_create_preproc();	\
 		wchar_t *patt = pattern;					\
-		int ret = bm_preprocess_literal(&prep, patt, wcslen(patt), flags); 	\
+		int ret = bm_preprocess_literal(prep, patt, wcslen(patt), flags); 	\
+		bm_free_preproc(prep);						\
 		ck_assert_int_eq(expected_return, ret);		\
 	}												\
 	END_TEST
@@ -62,9 +63,10 @@
 #define BM_TEST_PREP_FULL(name, pattern, flags, expected_return)		\
 	START_TEST(name)								\
 	{												\
-		bm_preproc_t prep;							\
+		bm_preproc_t* prep = bm_create_preproc();	\
 		wchar_t *patt = pattern;					\
-		int ret = bm_preprocess_full(&prep, patt, wcslen(patt), flags); \
+		int ret = bm_preprocess_full(prep, patt, wcslen(patt), flags);	\
+		bm_free_preproc(prep);						\
 		ck_assert_int_eq(expected_return, ret);		\
 	}												\
 	END_TEST
@@ -82,14 +84,15 @@
 #define BM_TEST_EXEC_MATCH(name, pattern, text, cflags, soff, eoff)			\
 	START_TEST(name)								\
 	{												\
-		bm_preproc_t prep;							\
+		bm_preproc_t* prep = bm_create_preproc();	\
 		wchar_t *patt = pattern;					\
-		int ret = bm_preprocess_full(&prep, patt, wcslen(patt), cflags);	\
+		int ret = bm_preprocess_full(prep, patt, wcslen(patt), cflags);		\
 		ck_assert(ret == REG_OK);					\
 													\
 		bm_match_t match;							\
 		char *t = text;								\
-		ret = bm_execute_stnd(&match, 1, &prep, t, strlen(t), false, false);\
+		ret = bm_execute_stnd(&match, 1, prep, t, strlen(t), false, false);\
+		bm_free_preproc(prep);						\
 													\
 		ck_assert_int_eq(REG_OK, ret);				\
 		ck_assert_int_eq(soff, match.soffset);		\
@@ -109,13 +112,14 @@
 #define BM_TEST_EXEC_CHECK(name, pattern, text, cflags, expected_return)	\
 	START_TEST(name)								\
 	{												\
-		bm_preproc_t prep;							\
+		bm_preproc_t* prep = bm_create_preproc();	\
 		wchar_t *patt = pattern;					\
-		int ret = bm_preprocess_full(&prep, patt, wcslen(patt), cflags);	\
+		int ret = bm_preprocess_full(prep, patt, wcslen(patt), cflags);	\
 		ck_assert(ret == REG_OK);					\
 													\
 		char *t = text;								\
-		ret = bm_execute_stnd(NULL, 0, &prep, t, strlen(t), false, false);	\
+		ret = bm_execute_stnd(NULL, 0, prep, t, strlen(t), false, false);	\
+		bm_free_preproc(prep);						\
 													\
 		ck_assert_int_eq(expected_return, ret);		\
 	}												\

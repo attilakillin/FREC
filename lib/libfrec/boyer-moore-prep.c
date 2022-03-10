@@ -33,6 +33,10 @@
 #include "boyer-moore.h"
 #include "convert.h"
 
+/*
+ * Fills the bad character shift table in the given stnd preprocessing struct.
+ * Standard character version. Optionally, the case can be ignored.
+ */
 static int
 fill_badc_shifts_stnd(bm_preproc_ct *stnd, bool ignore_case)
 {
@@ -44,7 +48,10 @@ fill_badc_shifts_stnd(bm_preproc_ct *stnd, bool ignore_case)
 	for (size_t i = 0; i <= UCHAR_MAX; i++) {
 		table[i] = len;
 	}
+
 	/* For characters present in the word: */
+	/* NB: the last character is skipped, because no jump occurs when the
+	 * current character of the text is the same as the last pattern char. */
 	for (size_t i = 0; i < len - 1; i++) {
 		char c = pattern[i];
 
@@ -54,33 +61,43 @@ fill_badc_shifts_stnd(bm_preproc_ct *stnd, bool ignore_case)
 		}
 
 		/* Set the shift value to their distance from the end of the word. */
-		table[c] = len - i - 1;
+		table[c] = len - 1 - i;
 	}
 
 	return (REG_OK);
 }
 
+/*
+ * Fills the bad character shift table in the given wide preprocessing struct.
+ * Wide character version. Optionally, the case can be ignored.
+ * Initializes a hashtable struct as wide->badc_shifts, which must be freed!
+ */
 static int
 fill_badc_shifts_wide(bm_preproc_wt *wide, bool ignore_case)
 {
 	wchar_t *pattern = wide->pattern;
 	size_t len = wide->len;
-	hashtable *table = hashtable_init(
-		len * (ignore_case ? 8 : 4), sizeof(wchar_t), sizeof(int));
+	hashtable *table = hashtable_init(len * 8, sizeof(wchar_t), sizeof(int));
 	wide->badc_shifts = table;
 
+	/* If initialization fails, return early. */
 	if (table == NULL) {
 		return (REG_ESPACE);
 	}
 
+	/* For characters present in the word: */
+	/* NB: the last character is skipped, because no jump occurs when the
+	 * current character of the text is the same as the last pattern char. */
 	for (size_t i = 0; i < len - 1; i++) {
 		wchar_t c = pattern[i];
-		int value = len - i - 1;
-
+		
+		/* Ignore case if necessary. */
 		if (ignore_case) {
 			c = towlower(c);
 		}
 
+		/* Set the shift value to their distance from the end of the word. */
+		int value = len - 1 - i;
 		int res = hashtable_put(table, &c, &value);
 		if (res == HASH_FAIL || res == HASH_FULL) {
 			return (REG_ESPACE);
@@ -90,11 +107,17 @@ fill_badc_shifts_wide(bm_preproc_wt *wide, bool ignore_case)
 	return (REG_OK);
 }
 
+/*
+ * Fills the good suffix table for the given pattern. The pattern is received
+ * as a char * variable, and as such, wchar_t pointers must be casted. The
+ * width parameter signals the width multiplier (compared to sizeof(char))
+ * of the casted pointer. Len is the number of elements in the pattern.
+ */
 static int
 calculate_good_shifts(
 	unsigned int *table, char *pattern, size_t width, size_t len)
 {
-	/* Calculate suffixes. */
+	/* Calculate suffixes (as per the specification of the BM algorithm). */
 
 	int *suff = malloc(sizeof(int) * len);
 	if (suff == NULL) {
@@ -122,7 +145,7 @@ calculate_good_shifts(
 		}
 	}
 
-	/* Calculate good shifts. */
+	/* Calculate good suffix shifts. */
 
 	for (int i = 0; i < len; i++) {
 		table[i] = len;
@@ -147,6 +170,11 @@ calculate_good_shifts(
 	return (REG_OK);
 }
 
+/*
+ * Fills the good suffix shift table in the given stnd preprocessing struct.
+ * Standard character version. Optionally, the case can be ignored.
+ * Allocates memory for the good suffix table, which must be freed!
+ */
 static int
 fill_good_shifts_stnd(bm_preproc_ct *stnd, bool ignore_case)
 {
@@ -170,6 +198,9 @@ fill_good_shifts_stnd(bm_preproc_ct *stnd, bool ignore_case)
 	/* Initialize good shifts table. */
 	stnd->goods_shifts = malloc(sizeof(int) * len);
 	if (stnd->goods_shifts == NULL) {
+		if (ignore_case) {
+			free(pattern);
+		}
 		return (REG_ESPACE);
 	}
 
@@ -177,14 +208,19 @@ fill_good_shifts_stnd(bm_preproc_ct *stnd, bool ignore_case)
 	int res = calculate_good_shifts(
 		stnd->goods_shifts, pattern, 1, len);
 
-	/* If the case was ignored, the copy must be freed. */
-	if (ignore_case) {
+	/* If the case was ignored or an error occurred, the copy is freed. */
+	if (ignore_case || res != REG_OK) {
 		free(pattern);
 	}
 
 	return res;
 }
 
+/*
+ * Fills the good suffix shift table in the given wide preprocessing struct.
+ * Wide character version. Optionally, the case can be ignored.
+ * Allocates memory for the good suffix table, which must be freed!
+ */
 static int
 fill_good_shifts_wide(bm_preproc_wt *wide, bool ignore_case)
 {
@@ -208,25 +244,100 @@ fill_good_shifts_wide(bm_preproc_wt *wide, bool ignore_case)
 	/* Initialize good shifts table. */
 	wide->goods_shifts = malloc(sizeof(int) * len);
 	if (wide->goods_shifts == NULL) {
+		if (ignore_case) {
+			free(pattern);
+		}
 		return (REG_ESPACE);
 	}
 
 	/* Calculate good shifts into the newly created table. */
-	int res = calculate_good_shifts(
-		wide->goods_shifts, pattern, sizeof(wchar_t) / sizeof(char), len);
+	int res = calculate_good_shifts(wide->goods_shifts,
+		(char *) pattern, sizeof(wchar_t) / sizeof(char), len);
 
-	/* If the case was ignored, the copy must be freed. */
-	if (ignore_case) {
+	/* If the case was ignored or an error occurred, the copy is freed. */
+	if (ignore_case || res != REG_OK) {
 		free(pattern);
 	}
 
 	return res;
 }
 
+/*
+ * Returns a zero initialized preprocessing struct or null if
+ * the memory allocation failed.
+ */
+bm_preproc_t *
+bm_create_preproc()
+{
+	bm_preproc_t *prep = malloc(sizeof(bm_preproc_t));
+	if (prep == NULL) {
+		return NULL;
+	}
+
+	prep->f_ignorecase = false;
+	prep->f_linebegin = false;
+	prep->f_lineend = false;
+	prep->f_matchall = false;
+	prep->f_newline = false;
+	prep->f_nosub = false;
+	prep->f_wholewords = false;
+
+	prep->stnd.goods_shifts = NULL;
+	prep->stnd.pattern = NULL;
+	prep->stnd.len = 0;
+
+	prep->wide.goods_shifts = NULL;
+	prep->wide.badc_shifts = NULL;
+	prep->wide.pattern = NULL;
+	prep->wide.len = 0;
+
+	return prep;
+}
+
+/*
+ * Frees the resources associated with the given BM preprocessing struct.
+ * Frees the struct itself too.
+ */
+void
+bm_free_preproc(bm_preproc_t *prep)
+{
+	if (prep->stnd.goods_shifts != NULL) {
+		free(prep->stnd.goods_shifts);
+		prep->stnd.goods_shifts = NULL;
+	}
+	if (prep->stnd.pattern != NULL) {
+		free(prep->stnd.pattern);
+		prep->stnd.pattern = NULL;
+	}
+
+	if (prep->wide.goods_shifts != NULL) {
+		free(prep->wide.goods_shifts);
+		prep->wide.goods_shifts = NULL;
+	}
+	if (prep->wide.pattern != NULL) {
+		free(prep->wide.pattern);
+		prep->wide.pattern = NULL;
+	}
+	if (prep->wide.badc_shifts != NULL) {
+		hashtable_free(prep->wide.badc_shifts);
+		prep->wide.badc_shifts = NULL;
+	}
+	
+	free(prep);
+}
+
+/*
+ * Given a result struct and a pattern with the given length, execute the
+ * Boyer-Moore preprocessing phase as if the pattern was a literal text.
+ * Additional flags can be passed using the cflags parameter.
+ * Returns REG_OK if the pattern preprocessing was successful, REG_ESPACE
+ * if a memory error occurred and REG_BADPAT if the compilation failed.
+ */
 int
 bm_preprocess_literal(
 	bm_preproc_t *result, wchar_t *pattern, size_t len, int cflags)
 {
+	/* Initialize flags (bool variables are not false by default). */
 	result->f_ignorecase = cflags & REG_ICASE;
 	result->f_wholewords = cflags & REG_WORD;
 	result->f_newline = cflags & REG_NEWLINE;
@@ -235,28 +346,20 @@ bm_preprocess_literal(
 	result->f_linebegin = false;
 	result->f_lineend = false;
 
+	/* If the length of the pattern is 0, set the matchall flag and return. */
 	if (len == 0) {
-		result->wide.pattern = malloc(sizeof(wchar_t) * 1);
-		if (result->wide.pattern == NULL) {
-			return (REG_ESPACE);
-		}
-		result->wide.pattern[0] = L'\0';
+		result->wide.pattern = NULL;
 		result->wide.len = 0;
 
-		result->stnd.pattern = malloc(sizeof(char) * 1);
-		if (result->stnd.pattern == NULL) {
-			// TODO Free
-			return (REG_ESPACE);
-		}
-		result->stnd.pattern[0] = '\0';
+		result->stnd.pattern = NULL;
 		result->stnd.len = 0;
 
 		result->f_matchall = true;
 		return (REG_OK);
 	}
 
-	// TODO This might happen even when we intend to use wchars
-	if (MB_CUR_MAX > 1 && (result->f_ignorecase || result->f_wholewords)) {
+	/* The options set by these flags won't work if MB_CUR_MAX > 1. */
+	if ((result->f_ignorecase || result->f_wholewords) && MB_CUR_MAX > 1) {
 		return (REG_BADPAT);
 	}
 
@@ -265,45 +368,52 @@ bm_preprocess_literal(
 	if (result->wide.pattern == NULL) {
 		return (REG_ESPACE);
 	}
+
+	/* Copy pattern and ensure terminating null character is present. */
 	memcpy(result->wide.pattern, pattern, sizeof(wchar_t) * len);
-	result->wide.pattern[len] = L'\0'; /* Ensure terminating null character. */
+	result->wide.pattern[len] = L'\0';
 	result->wide.len = len;
 
-	int ret;
-
-	/* Convert and initialize standard pattern from parameter. */
-	ret = frec_convert_wcs_to_mbs(
+	/* Convert and initialize standard pattern from the given wide pattern. */
+	int ret = frec_convert_wcs_to_mbs(
 		pattern, len, &(result->stnd.pattern), &(result->stnd.len));
 	if (ret != REG_OK) {
-		// TODO Free
+		bm_free_preproc(result);
 		return ret;
 	}
 
-	
+	/* Fill bad and good shift tables for both char varieties. */
 	ret = fill_badc_shifts_stnd(&(result->stnd), result->f_ignorecase);
 	if (ret != REG_OK) {
-		// TODO Free
+		bm_free_preproc(result);
 		return ret;
 	}
 	ret = fill_badc_shifts_wide(&(result->wide), result->f_ignorecase);
 	if (ret != REG_OK) {
-		// TODO Free
+		bm_free_preproc(result);
 		return ret;
 	}
 	ret = fill_good_shifts_stnd(&(result->stnd), result->f_ignorecase);
 	if (ret != REG_OK) {
-		// TODO Free
+		bm_free_preproc(result);
 		return ret;
 	}
 	ret = fill_good_shifts_wide(&(result->wide), result->f_ignorecase);
 	if (ret != REG_OK) {
-		// TODO Free
+		bm_free_preproc(result);
 		return ret;
 	}
 
 	return (REG_OK);
 }
 
+/*
+ * Strips escape characters from the given in_pat pattern (of in_len) length,
+ * and outputs the literal text result into out_pat (and its length into
+ * out_len).
+ * Input flags can be specified in in_flags, while output flags are set in the
+ * given out_flags preprocessing struct.
+ */
 static int
 strip_specials(
 	wchar_t *in_pat, size_t in_len, wchar_t *out_pat, size_t *out_len,
@@ -312,18 +422,21 @@ strip_specials(
 	wchar_t *pattern = in_pat;
 	size_t len = in_len;
 
+	/* If the first character is ^, set the given flag and continue. */
 	if (pattern[0] == L'^') {
 		out_flags->f_linebegin = true;
 		pattern++;
 		len--;
 	}
 
+	/* If the only character remaining is a $, do the same. */
 	if (pattern[0] == L'$' && len == 1) {
 		out_flags->f_lineend = true;
 		pattern++;
 		len--;
 	}
 
+	/* If GNU extensions are enabled, check for whole word markers. */
 	if ((in_flags & REG_GNU) && len >= 14 && 
 		(memcmp(pattern, L"[[:<:]]", sizeof(wchar_t) * 7) == 0) &&
 		(memcmp(pattern + len - 7, L"[[:>:]]", sizeof(wchar_t) * 7) == 0)) {
@@ -334,9 +447,11 @@ strip_specials(
 
 	bool escaped = false;
 	size_t pos = 0;
+	/* Traverse the given pattern: */
 	for (size_t i = 0; i < len; i++) {
 		wchar_t c = pattern[i];
 		switch (c) {
+		/* If the character is a backslash, invert the escaped flag. */
 		case L'\\':
 			if (escaped) {
 				out_pat[pos] = c;
@@ -346,32 +461,20 @@ strip_specials(
 				escaped = true;
 			}
 			break;
+		/* These characters have special meaning in both BRE and ERE. */
+		case L'*':
 		case L'[':
 		case L'.':
-			if (escaped) {
-				out_pat[pos] = c;
-				escaped = false;
-				pos++;
-			} else {
-				// TODO FREE
-				return (REG_BADPAT);
-			}
-			break;
-		case L'*':
-			if (escaped) {
-				out_pat[pos] = c;
-				escaped = false;
-				pos++;
-			} else {
-				// TODO FREE
-				return (REG_BADPAT);
-			}
-			break;
 		case L'^':
-			out_pat[pos] = c;
-			escaped = false;
-			pos++;
+			if (escaped) {
+				out_pat[pos] = c;
+				escaped = false;
+				pos++;
+			} else {
+				return (REG_BADPAT);
+			}
 			break;
+		/* $ only has special meaning at the end of the pattern. */
 		case L'$':
 			if (!escaped && i == len - 1) {
 				out_flags->f_lineend = true;
@@ -381,23 +484,27 @@ strip_specials(
 				pos++;
 			}
 			break;
+		/* These characters behave differently in BRE and ERE. In BRE,
+		 * they have to be escaped to have special meaning, while in ERE,
+		 * they have special meaning by default and lose that when escaped. */
 		case L'+':
 		case L'?':
 		case L'|':
 		case L'(':
 		case L'{':
+			/* Meaning: escaped and extended, OR not escaped and basic. */
 			if (escaped ^ !(in_flags & REG_EXTENDED)) {
 				out_pat[pos] = c;
 				escaped = false;
 				pos++;
 			} else {
-				// TODO FREE
 				return (REG_BADPAT);
 			}
 			break;
+		/* For any other character, only abort when the previous character
+		 * was a backslash. */
 		default:
 			if (escaped) {
-				// TODO FREE
 				return (REG_BADPAT);
 			} else {
 				out_pat[pos] = c;
@@ -407,32 +514,45 @@ strip_specials(
 		}
 	}
 
+	/* End the pattern with terminating null character and set length. */
 	out_pat[pos] = L'\0';
 	*out_len = pos;
 
 	return (REG_OK);
 }
 
+/*
+ * Given a result struct and a pattern with the given length, execute the
+ * Boyer-Moore preprocessing phase while ignoring escaped characters.
+ * Additional flags can be passed using the cflags parameter.
+ * Returns REG_OK if the pattern preprocessing was successful, REG_ESPACE
+ * if a memory error occurred and REG_BADPAT if the given pattern could not
+ * be reduced to a literal text string.
+ */
 int
 bm_preprocess_full(
 	bm_preproc_t *result, wchar_t *pattern, size_t len, int cflags)
 {
+	/* We'll execute literal preprocessing on a clean pattern. */
 	wchar_t *clean_pattern = malloc(sizeof(wchar_t) * (len + 1));
 	if (clean_pattern == NULL) {
 		return (REG_ESPACE);
 	}
 	size_t clean_len = 0;
 	
-	int ret = strip_specials(pattern, len, clean_pattern, &clean_len, cflags, result);
+	/* Strip escapes when applicable. */
+	int ret = strip_specials(
+		pattern, len, clean_pattern, &clean_len, cflags, result);
 	if (ret != REG_OK) {
-		// TODO FREE
-		return (REG_BADPAT);
+		free(clean_pattern);
+		return ret;
 	}
 
+	/* Execute literal preprocessing. */
 	ret = bm_preprocess_literal(result, clean_pattern, clean_len, cflags);
 	if (ret != REG_OK) {
-		// TODO FREE
-		return (REG_BADPAT);
+		free(clean_pattern);
+		return ret;
 	}
 
 	free(clean_pattern);
