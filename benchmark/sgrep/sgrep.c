@@ -220,8 +220,8 @@ main(int argc, char *argv[])
 
 		while (so < st.st_size) {
 #ifdef REG_MULTI
-			pmatch.m.rm_so = so;
-			pmatch.m.rm_eo = st.st_size;
+			pmatch.soffset = so;
+			pmatch.soffset = st.st_size;
 			r = frec_mregnexec(&preg, buffer, st.st_size, 1, &pmatch, eflags);
 #else
 			pmatch.rm_so = so;
@@ -247,8 +247,8 @@ main(int argc, char *argv[])
 			} else {
 				c++;
 #ifdef REG_MULTI
-				printf("(%d %d)\n", pmatch.m.rm_so, pmatch.m.rm_eo);
-				so = pmatch.m.rm_eo;
+				printf("(%d %d)\n", pmatch.soffset, pmatch.soffset);
+				so = pmatch.soffset;
 #endif
 #ifdef REG_POSIX
 				printf("(%ld %ld)\n", pmatch.rm_so, pmatch.rm_eo);

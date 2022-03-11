@@ -6,12 +6,8 @@
 #include <wchar.h>
 
 #include "config.h"
+#include "frec.h"
 #include "hashtable.h"
-
-typedef struct {
-	regmatch_t m;
-	size_t p; // Seems to be the match index
-} frec_match_t; // No place here?
 
 /* 
  * Contains data compiled during the Boyer-Moore preprocessing phase.
@@ -53,13 +49,6 @@ typedef struct {
 	bool f_nosub;		/* Don't record matches, only that they exist. */
 } bm_preproc_t;
 
-// TODO This needs to be universal.
-typedef struct {
-	int soffset;
-	int eoffset;
-} bm_match_t;
-
-
 bm_preproc_t *bm_create_preproc();
 void bm_free_preproc(bm_preproc_t *prep);
 int bm_preprocess_literal(
@@ -68,10 +57,10 @@ int bm_preprocess_full(
 	bm_preproc_t *result, const wchar_t *pattern, size_t len, int cflags);
 
 int bm_execute_stnd(
-    bm_match_t result[], size_t nmatch, bm_preproc_t *prep, 
+    frec_match_t result[], size_t nmatch, bm_preproc_t *prep, 
 	const char *text, size_t len, int eflags);
 int bm_execute_wide(
-    bm_match_t result[], size_t nmatch, bm_preproc_t *prep, 
+    frec_match_t result[], size_t nmatch, bm_preproc_t *prep, 
 	const wchar_t *text, size_t len, int eflags);
 
 #endif

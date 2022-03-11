@@ -74,7 +74,7 @@ static bool eol_matches_wide(const wchar_t *text, size_t text_len, size_t end_po
  */
 static int
 exec_turbo_bm_stnd(
-    bm_match_t result[], size_t nmatch,
+    frec_match_t result[], size_t nmatch,
     bm_preproc_t *prep, const char *text, size_t len,
     bool store_matches)
 {
@@ -149,7 +149,7 @@ exec_turbo_bm_stnd(
  */
 static int
 exec_turbo_bm_wide(
-    bm_match_t result[], size_t nmatch,
+    frec_match_t result[], size_t nmatch,
     bm_preproc_t *prep, const wchar_t *text, size_t len,
     bool store_matches)
 {
@@ -231,7 +231,7 @@ exec_turbo_bm_wide(
  */
 int
 bm_execute_stnd(
-    bm_match_t result[], size_t nmatch, bm_preproc_t *prep,
+    frec_match_t result[], size_t nmatch, bm_preproc_t *prep,
     const char *_text, size_t _len, int eflags)
 {
     /* Set bool fields. */
@@ -285,7 +285,7 @@ bm_execute_stnd(
  */
 int
 bm_execute_wide(
-    bm_match_t result[], size_t nmatch, bm_preproc_t *prep,
+    frec_match_t result[], size_t nmatch, bm_preproc_t *prep,
     const wchar_t *_text, size_t _len, int eflags)
 {
     /* Set bool fields. */

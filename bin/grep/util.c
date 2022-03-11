@@ -276,12 +276,12 @@ procline(struct str *l, int nottext)
 
 	/* Loop to process the whole line */
 	while (st < l->len) {
-		pmatch.m.rm_so = st;
-		pmatch.m.rm_eo = l->len;
+		pmatch.soffset = st;
+		pmatch.soffset = l->len;
 
 		r = frec_mregexec(&preg, l->dat, 1, &pmatch, eflags);
 		st = (cflags & REG_NOSUB) ? (size_t)l->len :
-		    (size_t)pmatch.m.rm_eo;
+		    (size_t)pmatch.soffset;
 		if (r == REG_NOMATCH)
 			continue;
 		else if (r != REG_OK) {
@@ -294,8 +294,8 @@ procline(struct str *l, int nottext)
 		 * if it fails it will not succeed later either.
 		 */
 		if (xflag)
-			if (pmatch.m.rm_so != 0 ||
-			    (size_t)pmatch.m.rm_eo != l->len)
+			if (pmatch.soffset != 0 ||
+			    (size_t)pmatch.soffset != l->len)
 			   break;
 
 		/* If reached here, we have a match. */
@@ -436,17 +436,17 @@ printline(struct str *line, int sep, frec_match_t *matches, int m)
 	if ((oflag || color) && m > 0) {
 		for (i = 0; i < m; i++) {
 			if (!oflag)
-				fwrite(line->dat + a, matches[i].m.rm_so - a, 1,
+				fwrite(line->dat + a, matches[i].soffset - a, 1,
 				    stdout);
 			if (color) 
 				fprintf(stdout, "\33[%sm\33[K", color);
 
-			fwrite(line->dat + matches[i].m.rm_so,
-				matches[i].m.rm_eo - matches[i].m.rm_so, 1,
+			fwrite(line->dat + matches[i].soffset,
+				matches[i].soffset - matches[i].soffset, 1,
 				stdout);
 			if (color) 
 				fprintf(stdout, "\33[m\33[K");
-			a = matches[i].m.rm_eo;
+			a = matches[i].soffset;
 			if (oflag)
 				putchar('\n');
 		}

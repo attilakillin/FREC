@@ -149,7 +149,7 @@ inline static void calc_offsets_pre(regexec_state *state)
 	state->offset = 0;
 
 	if (state->eflags & REG_STARTEND) {
-		state->offset += state->pmatch[0].m.rm_so;
+		state->offset += state->pmatch[0].soffset;
 		state->slen -= state->offset;
 	}
 	DEBUG_PRINTF("search offsets %ld - %ld", state->offset,
@@ -161,10 +161,10 @@ inline static void calc_offsets_post(regexec_state *state)
 
 	if ((state->eflags & REG_STARTEND) && !(state->cflags & REG_NOSUB))
 		for (size_t i = 0; i < state->nmatch; i++) {
-			state->pmatch[i].m.rm_so += state->offset;
-			state->pmatch[i].m.rm_eo += state->offset;
+			state->pmatch[i].soffset += state->offset;
+			state->pmatch[i].soffset += state->offset;
 			DEBUG_PRINTF("pmatch[%zu] offsets %d - %d", i,
-			    state->pmatch[i].m.rm_so, state->pmatch[i].m.rm_eo);
+			    state->pmatch[i].soffset, state->pmatch[i].soffset);
 		}
 }
 
@@ -179,7 +179,7 @@ _regexec(const void *preg, const void *str, size_t len,
 
 	init_state(&state, preg, str, len, nmatch, pmatch, cflags, eflags, type);
 	calc_offsets_pre(&state);
-	if ((state.eflags & REG_STARTEND) && (state.pmatch[0].m.rm_so > state.pmatch[0].m.rm_eo))
+	if ((state.eflags & REG_STARTEND) && (state.pmatch[0].soffset > state.pmatch[0].soffset))
 		return (REG_NOMATCH);
 	if (multi)
 		ret = frec_mmatch(&((const wchar_t *)state.str)[state.offset],

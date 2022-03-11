@@ -77,8 +77,8 @@ inline static void init_state(matcher_state *state, regex_t *preg,
 inline static void fix_offsets(matcher_state *state, size_t off) {
 
 	for (size_t i = 0; i < state->nmatch; i++) {
-		state->pmatch[i].m.rm_so += off;
-		state->pmatch[i].m.rm_eo += off;
+		state->pmatch[i].soffset += off;
+		state->pmatch[i].soffset += off;
 	}
 }
 
@@ -167,8 +167,8 @@ frec_match_heur(regex_t *preg, heur_t *heur, const void *str,
 			 * look for newlines.
 			 */
 			if (heur->tlen == -1) {
-				so = search_lf_backward(&state, pmatch[0].m.rm_so);
-				eo = search_lf_forward(&state, pmatch[0].m.rm_eo);
+				so = search_lf_backward(&state, pmatch[0].soffset);
+				eo = search_lf_forward(&state, pmatch[0].soffset);
 			}
 
 			/*
@@ -176,13 +176,13 @@ frec_match_heur(regex_t *preg, heur_t *heur, const void *str,
 			 * context that we can, without looking for explicit newlines.
 			 */
 			else {
-				state.rem = heur->tlen - (pmatch[0].m.rm_eo -
-				    pmatch[0].m.rm_so);
+				state.rem = heur->tlen - (pmatch[0].soffset -
+				    pmatch[0].soffset);
 
-				so = state.start + pmatch[0].m.rm_so <= state.rem ? 0 :
-				    state.start + pmatch[0].m.rm_so - state.rem;
-				eo = state.start + pmatch[0].m.rm_eo + state.rem >= state.len ? state.len :
-				    state.start + pmatch[0].m.rm_eo + state.rem;
+				so = state.start + pmatch[0].soffset <= state.rem ? 0 :
+				    state.start + pmatch[0].soffset - state.rem;
+				eo = state.start + pmatch[0].soffset + state.rem >= state.len ? state.len :
+				    state.start + pmatch[0].soffset + state.rem;
 			}
 
 			seek_to(&state, so);
@@ -220,7 +220,7 @@ frec_match_heur(regex_t *preg, heur_t *heur, const void *str,
 			if (ret != REG_OK)
 				return (ret);
 
-			state.start += state.pmatch[0].m.rm_so;
+			state.start += state.pmatch[0].soffset;
 			size_t new_len = state.len - state.start;
 
 			if (new_len > state.len - state.start)
@@ -322,7 +322,7 @@ frec_mmatch(const void *str, size_t len, int type, size_t nmatch,
 				if (ret == REG_OK)
 					matched = true;
 				else if (ret == REG_NOMATCH)
-					pm[i][0].m.rm_so = -1;
+					pm[i][0].soffset = -1;
 				else
 					goto finish1;
 			}
@@ -334,20 +334,20 @@ frec_mmatch(const void *str, size_t len, int type, size_t nmatch,
 				/* If there are matches, find the first one. */
 				first = 0;
 				for (i = 1; i < preg->k; i++) {
-					if (pm[i][0].m.rm_so == -1)
+					if (pm[i][0].soffset == -1)
 						continue;
-					else if ((pm[i][0].m.rm_so < pm[first][0].m.rm_so) ||
-					    ((pm[i][0].m.rm_so == pm[first][0].m.rm_so) && (pm[i][0].m.rm_eo > pm[first][0].m.rm_eo)))
+					else if ((pm[i][0].soffset < pm[first][0].soffset) ||
+					    ((pm[i][0].soffset == pm[first][0].soffset) && (pm[i][0].soffset > pm[first][0].soffset)))
 						first = i;
 				}
 			}
 
 			/* Fill in the offsets before returning. */
 			for (i = 0; i < nmatch; i++) {
-				pmatch[i].m.rm_so = pm[first][i].m.rm_so;
-				pmatch[i].m.rm_eo = pm[first][i].m.rm_eo;
+				pmatch[i].soffset = pm[first][i].soffset;
+				pmatch[i].soffset = pm[first][i].soffset;
 				pmatch[i].p = i;
-				DEBUG_PRINTF("offsets %zu: %d %d", i, pmatch[i].m.rm_so, pmatch[i].m.rm_eo);
+				DEBUG_PRINTF("offsets %zu: %d %d", i, pmatch[i].soffset, pmatch[i].soffset);
 			}
 			ret = REG_OK;
 
@@ -394,12 +394,12 @@ finish1:
 			 */
 			if (preg->patterns[rpm.p].heur->tlen != -1) {
 				size_t rem = preg->patterns[rpm.p].heur->tlen
-				    - (rpm.m.rm_eo - rpm.m.rm_so);
+				    - (rpm.soffset - rpm.soffset);
 
-				int so = st + rpm.m.rm_so <= rem ? 0 :
-				    st + rpm.m.rm_so - rem;
-				int eo = st + rpm.m.rm_eo + rem >= len ? len :
-				    st + rpm.m.rm_eo + rem;
+				int so = st + rpm.soffset <= rem ? 0 :
+				    st + rpm.soffset - rem;
+				int eo = st + rpm.soffset + rem >= len ? len :
+				    st + rpm.soffset + rem;
 
 				ret = frec_match(&preg->patterns[rpm.p], INPUT(so), so - eo,
 				    type, need_offsets ? nmatch : 0, pm, eflags);
@@ -425,7 +425,7 @@ finish1:
 			}
 
 			/* Need to start from here if matching failed. */
-			st += rpm.m.rm_so + 1;
+			st += rpm.soffset + 1;
 
 			/* Evaluate result. t*/
 			if (ret == REG_NOMATCH)
@@ -435,8 +435,8 @@ finish1:
 					return REG_OK;
 				else {
 					for (size_t i = 0; i < nmatch; i++) {
-						pmatch[i].m.rm_so = pm[i].m.rm_so;
-						pmatch[i].m.rm_eo = pm[i].m.rm_eo;
+						pmatch[i].soffset = pm[i].soffset;
+						pmatch[i].soffset = pm[i].soffset;
 						pmatch[i].p = rpm.p;
 						goto finish2;
 					}
