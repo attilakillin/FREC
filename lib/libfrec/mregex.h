@@ -6,6 +6,7 @@
 
 #include "frec.h"
 
+/* Isn't mfrec_t a better name? */
 typedef struct {
 	size_t k;		/* Number of patterns */
 	frec_t *patterns;	/* regex_t structure for each pattern */

@@ -24,6 +24,7 @@
 typedef struct {
 	regex_t orig;
 	bm_preproc_t *shortcut;
+	bm_preproc_t *bm_prep;
 	heur_t *heur;
 	const char *re_endp;
 	const wchar_t *re_wendp;

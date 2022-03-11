@@ -7,13 +7,11 @@
 #include "mregex.h"
 #include "frec.h"
 
-extern int	 frec_compile(frec_t *preg, const wchar_t *wregex,
-		     size_t wn,	const char *regex, size_t n, int cflags);
-extern int	 frec_compile_bm(frec_t *preg, const wchar_t *wregex,
-		     size_t wn, const char *regex, size_t n, int cflags);
-extern int	 frec_compile_heur(frec_t *preg, const wchar_t *regex,
-		     size_t n, int cflags);
-extern int	 frec_mcompile(mregex_t *preg, size_t nr,
-		     const wchar_t **wregex, size_t *wn, const char **regex,
-		     size_t *n, int cflags);
+int
+frec_compile(frec_t *frec, const wchar_t *pattern, size_t len, int cflags);
+
+int
+frec_mcompile(mregex_t *mfrec, size_t k,
+	const wchar_t **patterns, size_t *lens, int cflags);
+
 #endif

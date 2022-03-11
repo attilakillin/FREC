@@ -30,250 +30,219 @@
 #include <wchar.h>
 
 #include "boyer-moore.h"
-#include "config.h"
-#include "compile.h"
-#include "convert.h"
-#include "heuristic.h"
-#include "mregex.h"
 #include "frec.h"
+#include "mregex.h"
 #include "wu-manber.h"
 
 /*
- * Prepare heuristics for single pattern matching.
+ * Compiles the bm_prep field of the frec struct based on the
+ * given pattern with the given length.
+ * Additional flags can be specified in the cflags field.
  */
-int
-frec_compile(frec_t *preg, const wchar_t *wregex, size_t wn,
-    const char *regex, size_t n, int cflags)
+static int
+compile_boyer_moore(
+    frec_t *frec, const wchar_t *pattern, size_t len, int cflags)
 {
-	int ret;
+    /* If the pattern is too short, literal matching is inefficient. */
+    if (len < 2) {
+        frec->bm_prep = NULL;
+    }
 
-	DEBUG_PRINT("enter");
+    bm_preproc_t *prep = bm_create_preproc();
+    if (prep == NULL) {
+        return (REG_ESPACE);
+    }
+    /* Based on the literal flag, choose apppropriate preprocessing. */
+    int ret = (cflags & REG_LITERAL)
+        ? bm_preprocess_literal(prep, pattern, len, cflags)
+        : bm_preprocess_full(prep, pattern, len, cflags);
+    
+    /* If valid, set the relevant return field, else free the struct. */
+    if (ret == REG_OK) {
+        frec->bm_prep = prep;
+    } else {
+        frec->bm_prep = NULL;
+        bm_free_preproc(prep);
+    }
 
-	/*
-	 * First, we always compile the NFA and it also serves as
-	 * pattern validation.  In this way, we reuse the library's
-	 * validation logic.
-	 */
-	ret = _dist_regncomp(&preg->orig, regex, n, cflags);
-	if (ret != REG_OK) {
-		DEBUG_PRINT("regex lib compilation failed");
-		return (ret);
-	}
-
-	/*
-	 * Check if the pattern is literal even though REG_LITERAL
-	 * was not set.
-	 */
-	ret = frec_compile_bm(preg, wregex, wn, regex, n, cflags);
-
-	/* Only try to compile heuristic if the pattern is not literal */
-	if ((ret != REG_OK) && !(cflags & REG_LITERAL)) {
-		DEBUG_PRINT("not literal, trying to compile heuristics");
-		frec_compile_heur(preg, wregex, wn, cflags);
-	} else {
-		DEBUG_PRINT("literal, no heuristic needed");
-		preg->heur = NULL;
-	}
-
-	preg->cflags = cflags;
-
-	/* When here, at least NFA surely succeeded. */
-	return (REG_OK);
+    return ret;
 }
 
 /*
- * Try to compile a pattern for literal matching, regardless of
- * whether REG_LITERAL is explicitly speicified or not.
+ * Compiles the heur field of the frec struct based on the
+ * given pattern with the given length.
+ * Additional flags can be specified in the cflags field.
  */
-int
-frec_compile_bm(frec_t *preg, const wchar_t *wregex, size_t wn,
-    const char *regex, size_t n, int cflags)
+static int
+compile_heuristic(
+    frec_t *frec, const wchar_t *pattern, size_t len, int cflags)
 {
-	bm_preproc_t *shortcut;
-	int ret = REG_OK;
+    heur_t *heur = malloc(sizeof(heur_t));
+    if (heur == NULL) {
+        return (REG_ESPACE);
+    }
 
-	DEBUG_PRINT("enter");
+    /* Execute heuristic compilation. */
+    int ret = frec_proc_heur(heur, pattern, len, cflags);
+    
+    /* If valid, set the relevant return field, else free the struct. */
+    if (ret == REG_OK) {
+        frec->heur = heur;
+    } else {
+        frec->heur = NULL;
+        free(heur);
+    }
 
-	/*
-	 * Pattern length must be > 2; otherwise literal
-	 * matching is inefficient.
-	 */
-	if (n < 2) {
-		DEBUG_PRINT("pattern too short for literal matching");
-		goto too_short;
-	}
-
-	shortcut = bm_create_preproc();
-	if (shortcut == NULL)
-		return (REG_ESPACE);
-	ret = (cflags & REG_LITERAL)
-		? bm_preprocess_literal(shortcut, wregex, wn, cflags)
-		: bm_preprocess_full(shortcut, wregex, wn, cflags);
-	if (ret == REG_OK) {
-		DEBUG_PRINT("literal matcher compiled");
-		preg->shortcut = shortcut;
-	} else {
-		DEBUG_PRINT("literal matcher did not compile");
-		bm_free_preproc(shortcut);
-too_short:
-		preg->shortcut = NULL;
-	}
-
-	return (ret);
+    return ret;
 }
 
 /*
- * If the pattern is not literal, it may still be possible to use
- * a literal as a heuristics.
+ * Given a frec_t struct and a pattern with a given length, compile a
+ * usual NFA struct (supplied by the underlying library), a Boyer-Moore
+ * fast text searching struct, and a custom heuristic struct.
+ * Additional flags may be supplied using the cflags parameter.
+ * 
+ * Given a newly allocated frec_t struct, this method fills all
+ * its compilation-related fields.
  */
 int
-frec_compile_heur(frec_t *preg, const wchar_t *regex, size_t n, int cflags)
+frec_compile(frec_t *frec, const wchar_t *pattern, size_t len, int cflags)
 {
-	heur_t *heur;
-	int ret;
+    /* Compile NFA using our regex library. If we can't optimize, we
+     * can still use this original struct, and this way, we validate
+     * the pattern automatically. */
+    int ret = _dist_regwncomp(&frec->orig, pattern, len, cflags);
+    if (ret != REG_OK) {
+        return ret;
+    }
 
-	heur = malloc(sizeof(heur_t));
-	if (heur == NULL)
-		return (REG_ESPACE);
+    /* Try and compile BM prep struct irrespective of the REG_LITERAL flag. */
+    ret = compile_boyer_moore(frec, pattern, len, cflags);
 
-	ret = frec_proc_heur(heur, regex, n, cflags);
-	if (ret != REG_OK) {
-		DEBUG_PRINT("heuristic did not compile");
-		free(heur);
-		preg->heur = NULL;
-	} else {
-		DEBUG_PRINT("heuristic compiled");
-		preg->heur = heur;
-	}
-	return (ret);
+    /* A heuristic approach is only needed if the pattern is not literal. */
+    if (ret != REG_OK && !(cflags & REG_LITERAL)) {
+        compile_heuristic(frec, pattern, len, cflags);
+    } else {
+        frec->heur = NULL;
+    }
+
+    /* We save the compilation flags. At this point, at least
+     * the library-supplied NFA compilation was successful. */
+    frec->cflags = cflags;
+    return (REG_OK);
 }
 
 /*
- * Prepare heuristics for multiple pattern matching.
+ * Given an mregex_t struct and k patterns with given lengths, compile a
+ * usual NFA struct (supplied by the underlying library), a Boyer-Moore
+ * fast text searching struct, and a custom heuristic struct for each pattern.
+ * Additional flags may be supplied using the cflags parameter.
+ *
+ * Given a newly allocated mfrec_t struct, this method fills all
+ * its compilation-related fields.
  */
 int
-frec_mcompile(mregex_t *preg, size_t nr, const wchar_t **wregex,
-    size_t *wn, const char **regex, size_t *n, int cflags)
+frec_mcompile(mregex_t *mfrec, size_t k,
+    const wchar_t **patterns, size_t *lens, int cflags)
 {
-	int ret;
-	const wchar_t **frags = NULL;
-	size_t *siz = NULL;
-	wmsearch_t *wm = NULL;
+    mfrec->patterns = malloc(sizeof(frec_t) * k);
+    if (mfrec->patterns == NULL) {
+        return (REG_ESPACE);
+    }
+    mfrec->k = k;
+    mfrec->cflags = cflags;
+    mfrec->searchdata = NULL; // TODO Bad name :(
 
-	DEBUG_PRINT("enter");
+    /* Compile each pattern. */
+    for (size_t i = 0; i < k; i++) {
+        int ret = frec_compile(
+            &mfrec->patterns[i], patterns[i], lens[i], cflags);
+        /* On error, we record the index of the bad pattern. */
+        if (ret != REG_OK) {
+            mfrec->err = i;
+            // TODO FREE mfrec
+        }
+    }
 
-	preg->k = nr;
-	preg->searchdata = NULL;
-	preg->patterns = malloc(nr * sizeof(frec_t));
-	preg->cflags = cflags;
-	if (!preg->patterns)
-		return (REG_ESPACE);
+    /* If there's only one pattern, return early. */
+    if (k == 1) {
+        mfrec->type = MHEUR_SINGLE;
+        return (REG_OK);
+    }
 
-	/* Compile NFA, BM and heuristic for each pattern. */
-	for (size_t i = 0; i < nr; i++) {
-		ret = frec_compile(&preg->patterns[i], wregex[i],
-		     wn[i], regex[i], n[i], cflags);
-		if (ret != REG_OK) {
-			preg->err = i;
-			goto err;
-		}
-	}
+    /* Set the heuristic type based on the compilation flags. */
+    if (cflags & REG_LITERAL) {
+        mfrec->type = MHEUR_LITERAL;
+    } else if (cflags & REG_NEWLINE) {
+        // TODO I Don't yet understand this case.
+        mfrec->type = MHEUR_LONGEST;
+    } else {
+        /* If not explicitly marked, check if all patterns can be
+         * matched either literally, or with the HEUR_LONGEST heuristic.
+         * If not, we can't speed up the multiple pattern matcher. */
+        for (size_t i = 0; i < k; i++) {
+            frec_t *curr = &mfrec->patterns[i];
+            if (curr->bm_prep == NULL && 
+                (curr->heur == NULL || curr->heur->type != HEUR_LONGEST)) {
+                    mfrec->type = MHEUR_NONE;
+                    return (REG_OK);
+                }
+        }
+        mfrec->type = MHEUR_LONGEST;
+    }
 
-	/* Use single pattern matching in case of one pattern */
-	if (nr == 1) {
-		DEBUG_PRINT("strategy MHEUR_SINGLE");
-		preg->type = MHEUR_SINGLE;
-		goto finish;
-	}
+    /* If we reach this point, we'll definitely need this struct. */
+    wmsearch_t *wumanber = malloc(sizeof(wmsearch_t));
+    if (wumanber == NULL) {
+        // TODO Free mfrec
+    }
+    wumanber->cflags = cflags;
 
+    /* If the heuristic type was literal, we'll use the patterns as-is. */
+    if (mfrec->type = MHEUR_LITERAL) {
+        int ret = frec_wmcomp(wumanber, k, patterns, lens, cflags);
+        if (ret != REG_OK) {
+            // TODO Free mfrec, wumanber
+            return ret;
+        }
+    } else {
+        /* Otherwise we'll assemble the patterns from the Boyer-Moore
+         * or the heuristic compilation phase. */
+        const wchar_t **pat_ptrs = malloc(sizeof(wchar_t *) * k);
+        if (pat_ptrs == NULL) {
+            // TODO Free mfrec, wumanber
+            return (REG_ESPACE);
+        }
+        size_t *len_ptrs = malloc(sizeof(size_t) * k);
+        if (len_ptrs == NULL) {
+            // TODO free mfrec, wumanber, pat_ptrs
+            return (REG_ESPACE);
+        }
 
-	/* Set the specific type of matching. */
-	if (cflags & REG_LITERAL) {
-		DEBUG_PRINT("strategy MHEUR_LITERAL");
-		preg->type = MHEUR_LITERAL;
-        } else if (cflags & REG_NEWLINE) {
-		DEBUG_PRINT("strategy MHEUR_LONGEST");
-                preg->type = MHEUR_LONGEST;
-        } else {
-		/* If not explicitly marked as literal, check if all patterns
-		 * can be matched either with literal matching or the
-		 * HEUR_LONGEST strategy. Otherwise, it is not possible
-		 * to speed up multiple pattern matching.
-		 */
-		preg->type = MHEUR_LONGEST;
-		for (size_t i = 0; i < nr; i++) {
-			/* Literal */
-			if (preg->patterns[i].shortcut != NULL)
-				continue;
-			/* HEUR_LONGEST */
-			else if ((preg->patterns[i].heur != NULL)
-			    && (((heur_t *)(preg->patterns[i].heur))->type == HEUR_LONGEST))
-				continue;
-			else {
-				DEBUG_PRINT("strategy MHEUR_NONE");
-				preg->type = MHEUR_NONE;
-				goto finish;
-			}
-		}
-		if (preg->type == MHEUR_LONGEST)
-			DEBUG_PRINT("strategy MHEUR_LONGEST");
-	}
+        /* Reference values from previous optimalizations. */
+        for (size_t i = 0; i < k; i++) {
+            frec_t *curr = &mfrec->patterns[i];
+            if (curr->bm_prep != NULL) {
+                pat_ptrs[i] = curr->bm_prep->wide.pattern;
+                len_ptrs[i] = curr->bm_prep->wide.len;
+            } else {
+                pat_ptrs[i] = curr->heur->heur->wide.pattern;
+                len_ptrs[i] = curr->heur->heur->wide.len;
+            }
+        }
 
-	/*
-	 * Set frag and siz to point to the fragments to compile and
-	 * their respective sizes.
-	 */
-	if (!(cflags & REG_LITERAL)) {
-		frags = malloc(nr * sizeof(char *));
-		if (!frags)
-			goto err;
+        /* Execute compilation and free temporary arrays. */
+        int ret = frec_wmcomp(wumanber, k, pat_ptrs, len_ptrs, cflags);
+        free(pat_ptrs);
+        free(len_ptrs);
 
-		siz = malloc(nr * sizeof(size_t));
-		if (!siz)
-			goto err;
+        if (ret != REG_OK) {
+            // TODO Free mfrec, wumanber
+            return ret;
+        }
+    }
 
-		for (size_t j = 0; j < nr; j++) {
-			if (preg->patterns[j].shortcut != NULL) {
-				frags[j] = preg->patterns[j].shortcut->wide.pattern;
-				siz[j] = preg->patterns[j].shortcut->wide.len;
-			} else {
-				frags[j] = ((heur_t *)(preg->patterns[j].heur))->heur->wide.pattern;
-				siz[j] = ((heur_t *)(preg->patterns[j].heur))->heur->wide.len;
-			}
-		}
-	} else {
-		frags = wregex;
-		siz = wn;
-	}
-
-	/* Alloc and compile the fragments for Wu-Manber algorithm. */
-	wm = malloc(sizeof(wmsearch_t));
-	if (!wm)
-		goto err;
-	ret = frec_wmcomp(wm, nr, frags, siz, cflags);
-	if (ret != REG_OK)
-		goto err;
-	wm->cflags = cflags;
-	preg->searchdata = wm;
-
-	goto finish;
-
-err:
-	if (preg->patterns) {
-		for (size_t i = 1; i < nr; i++)
-			_dist_regfree(&preg->patterns[i].orig);
-			// TODO I feel like I should clean up the bm part too.
-		free(preg->patterns);
-	}
-	if (wm)
-		free(wm);
-
-finish:
-	if (!(cflags & REG_LITERAL) && !(preg->type == MHEUR_SINGLE)) {
-		if (frags)
-			free(frags);
-		if (siz)
-			free(siz);
-	}
-	return (ret);
+    mfrec->searchdata = wumanber; // TODO I don't like this name
+    
+    return (REG_OK);
 }

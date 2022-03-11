@@ -52,7 +52,7 @@ frec_regncomp(frec_t *preg, const char *regex, size_t n, int cflags)
 		DEBUG_PRINTF("returning %d", ret);
 		return (ret);
 	} else
-		ret = frec_compile(preg, wregex, wlen, regex, n, cflags);
+		ret = frec_compile(preg, wregex, wlen, cflags);
 	free(wregex);
 	DEBUG_PRINTF("returning %d", ret);
 	return (ret);
@@ -89,7 +89,7 @@ frec_regwncomp(frec_t *preg, const wchar_t *regex, size_t n, int cflags)
 		DEBUG_PRINTF("returning %d", ret);
 		return (ret);
 	} else
-		ret = frec_compile(preg, regex, n, sregex, slen, cflags);
+		ret = frec_compile(preg, regex, n, cflags);
 	free(sregex);
 	DEBUG_PRINTF("returning %d", ret);
 	return (ret);
@@ -286,7 +286,7 @@ frec_mregncomp(mregex_t *preg, size_t nr, const char **regex,
 	}
 
 	wr = (const wchar_t **)wregex;
-	ret = frec_mcompile(preg, nr, wr, wlen, regex, n, cflags);
+	ret = frec_mcompile(preg, nr, wr, wlen, cflags);
 
 err:
 	if (wregex) {
@@ -352,7 +352,7 @@ frec_mregwncomp(mregex_t *preg, size_t nr, const wchar_t **regex,
 	}
 
 	sr = (const char **)sregex;
-	ret = frec_mcompile(preg, nr, regex, n, sr, slen, cflags);
+	ret = frec_mcompile(preg, nr, regex, n, cflags);
 
 err:
 	if (sregex) {
