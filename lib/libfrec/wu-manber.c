@@ -328,8 +328,8 @@ frec_wmexec(const wmsearch_t *wm, const void *str, size_t len,
 							if (len - pos >= SIZES[idx] - m) {
 								if (memcmp(PAT_ARR(idx, 0), INPUT(pos - SIZES[idx]), CHSIZ * SIZES[idx])) {
 									if (!(wm->cflags & REG_NOSUB) && (nmatch > 0)) {
-										pmatch->m.rm_so = pos - SIZES[idx];
-										pmatch->m.rm_eo = pos;
+										pmatch->soffset = pos - SIZES[idx];
+										pmatch->eoffset = pos;
 										pmatch->p = idx;
 									}
 									ret = REG_OK;

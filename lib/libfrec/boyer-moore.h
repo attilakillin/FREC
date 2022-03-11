@@ -6,7 +6,7 @@
 #include <wchar.h>
 
 #include "config.h"
-#include "frec.h"
+#include "frec-match.h"
 #include "hashtable.h"
 
 /* 

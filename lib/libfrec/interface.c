@@ -81,7 +81,7 @@ frec_regwcomp(frec_t *prep, const wchar_t *regex, int cflags)
 	if ((cflags & REG_PEND) && prep->re_wendp >= regex) {
 		len = prep->re_wendp - regex;
 	} else {
-		len = (regex != NULL) ? strlen(regex) : 0;
+		len = (regex != NULL) ? wcslen(regex) : 0;
 	}
 
 	return frec_regwncomp(prep, regex, len, cflags);

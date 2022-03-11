@@ -117,16 +117,20 @@ inline static int call_regexec(const regex_t *preg, const void *str, size_t len,
 	if (pm == NULL)
 		return (REG_ESPACE);
 
-	for (size_t i = 0; i < nmatch; i++)
-		pm[i] = pmatch[i].m;
+	for (size_t i = 0; i < nmatch; i++) {
+		pm[i].rm_so = pmatch[i].soffset;
+		pm[i].rm_eo = pmatch[i].eoffset;
+	}
 
 	ret = ((type == STR_WIDE) ?
 	    (_dist_regwnexec(preg, str, len, nmatch, pm, eflags)) :
 	    (_dist_regnexec(preg, str, len, nmatch, pm, eflags)));
 
 	if (ret == REG_OK)
-		for (size_t i = 0; i < nmatch; i++)
-			pmatch[i].m = pm[i];
+		for (size_t i = 0; i < nmatch; i++) {
+			pmatch[i].soffset = pm[i].rm_so;
+			pmatch[i].eoffset = pm[i].rm_eo;
+		}
 	free(pm);
 
 	return ret;
