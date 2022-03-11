@@ -39,76 +39,52 @@
 #include "wu-manber.h"
 
 int
-frec_regncomp(frec_t *preg, const char *regex, size_t n, int cflags)
+frec_regncomp(frec_t *prep, const char *regex, size_t len, int cflags)
 {
 	wchar_t *wregex;
 	size_t wlen;
-	int ret;
 
-	DEBUG_PRINT("enter");
-
-	ret = frec_convert_mbs_to_wcs(regex, n, &wregex, &wlen);
+	int ret = frec_convert_mbs_to_wcs(regex, len, &wregex, &wlen);
 	if (ret != REG_OK) {
-		DEBUG_PRINTF("returning %d", ret);
-		return (ret);
-	} else
-		ret = frec_compile(preg, wregex, wlen, cflags);
+		return ret;
+	}
+
+	ret = frec_compile(prep, wregex, wlen, cflags);
+
 	free(wregex);
-	DEBUG_PRINTF("returning %d", ret);
-	return (ret);
-}
-
-int
-frec_regcomp(frec_t *preg, const char *regex, int cflags)
-{
-	int ret;
-
-	DEBUG_PRINT("enter");
-
-	if ((cflags & REG_PEND) && (preg->re_endp >= regex))
-		ret = frec_regncomp(preg, regex, preg->re_endp - regex, cflags);
-	else
-		ret = frec_regncomp(preg, regex, regex ? strlen(regex) : 0, cflags);
-
-	DEBUG_PRINTF("returning %d", ret);
 	return ret;
 }
 
-
 int
-frec_regwncomp(frec_t *preg, const wchar_t *regex, size_t n, int cflags)
+frec_regcomp(frec_t *prep, const char *regex, int cflags)
 {
-	char *sregex;
-	size_t slen;
-	int ret;
+	size_t len;
+	if ((cflags & REG_PEND) && prep->re_endp >= regex) {
+		len = prep->re_endp - regex;
+	} else {
+		len = (regex != NULL) ? strlen(regex) : 0;
+	}
 
-	DEBUG_PRINT("enter");
-
-	ret = frec_convert_wcs_to_mbs(regex, n, &sregex, &slen);
-	if (ret != REG_OK) {
-		DEBUG_PRINTF("returning %d", ret);
-		return (ret);
-	} else
-		ret = frec_compile(preg, regex, n, cflags);
-	free(sregex);
-	DEBUG_PRINTF("returning %d", ret);
-	return (ret);
+	return frec_regncomp(prep, regex, len, cflags);
 }
 
 int
-frec_regwcomp(frec_t *preg, const wchar_t *regex, int cflags)
+frec_regwncomp(frec_t *prep, const wchar_t *regex, size_t len, int cflags)
 {
-	int ret;
+	return frec_compile(prep, regex, len, cflags);
+}
 
-	DEBUG_PRINT("enter");
+int
+frec_regwcomp(frec_t *prep, const wchar_t *regex, int cflags)
+{
+	size_t len;
+	if ((cflags & REG_PEND) && prep->re_wendp >= regex) {
+		len = prep->re_wendp - regex;
+	} else {
+		len = (regex != NULL) ? strlen(regex) : 0;
+	}
 
-	if ((cflags & REG_PEND) && (preg->re_wendp >= regex))
-		ret = frec_regwncomp(preg, regex, preg->re_wendp - regex, cflags);
-	else
-		ret = frec_regwncomp(preg, regex, regex ? wcslen(regex) : 0, cflags);
-
-	DEBUG_PRINTF("returning %d", ret);
-	return ret;
+	return frec_regwncomp(prep, regex, len, cflags);
 }
 
 void
