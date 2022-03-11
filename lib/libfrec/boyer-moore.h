@@ -53,50 +53,19 @@ typedef struct {
 	bool f_nosub;		/* Don't record matches, only that they exist. */
 } bm_preproc_t;
 
-
+// TODO This needs to be universal.
 typedef struct {
 	int soffset;
 	int eoffset;
 } bm_match_t;
 
 
-typedef struct {
-	size_t wlen;
-	size_t len;
-
-	wchar_t *wpattern;
-	char *pattern;
-
-	void *qsBc_table;
-	unsigned int qsBc[UCHAR_MAX + 1];
-
-	unsigned int *sbmGs;
-	unsigned int *bmGs;
-
-	unsigned int defBc; // Seems redundant
-
-	bool *wescmap; // Unused
-	bool *escmap; // Unused
-	const char *re_endp; // Unused
-
-  /* flags */
-	bool hasdot; // Unused
-	bool bol;
-	bool eol;
-	bool word;
-	bool icase;
-	bool newline;
-	bool nosub;
-	bool matchall;
-	bool reversed;
-} fastmatch_t;
-
 bm_preproc_t *bm_create_preproc();
 void bm_free_preproc(bm_preproc_t *prep);
 int bm_preprocess_literal(
-	bm_preproc_t *result, wchar_t *pattern, size_t len, int cflags);
+	bm_preproc_t *result, const wchar_t *pattern, size_t len, int cflags);
 int bm_preprocess_full(
-	bm_preproc_t *result, wchar_t *pattern, size_t len, int cflags);
+	bm_preproc_t *result, const wchar_t *pattern, size_t len, int cflags);
 
 int bm_execute_stnd(
     bm_match_t result[], size_t nmatch, bm_preproc_t *prep, 
@@ -104,14 +73,5 @@ int bm_execute_stnd(
 int bm_execute_wide(
     bm_match_t result[], size_t nmatch, bm_preproc_t *prep, 
 	const wchar_t *text, size_t len, int eflags);
-
-int	frec_proc_literal(fastmatch_t *, const wchar_t *, size_t,
-		const char *, size_t, int);
-int	frec_proc_fast(fastmatch_t *, const wchar_t *, size_t,
-		const char *, size_t, int);
-int	frec_match_fast(const fastmatch_t *fg, const void *data,
-		size_t len, int type, int nmatch, frec_match_t pmatch[],
-		int eflags);
-void	frec_free_fast(fastmatch_t *preg);
 
 #endif

@@ -4,6 +4,7 @@
 #include <sys/param.h>
 #include <stdio.h>
 
+#include "boyer-moore.h"
 #include "config.h"
 #include "heuristic.h"
 
@@ -22,7 +23,7 @@
 // TODO Document this struct
 typedef struct {
 	regex_t orig;
-	fastmatch_t *shortcut;
+	bm_preproc_t *shortcut;
 	heur_t *heur;
 	const char *re_endp;
 	const wchar_t *re_wendp;

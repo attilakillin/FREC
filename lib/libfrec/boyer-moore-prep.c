@@ -338,7 +338,7 @@ bm_free_preproc(bm_preproc_t *prep)
  */
 int
 bm_preprocess_literal(
-	bm_preproc_t *result, wchar_t *pattern, size_t len, int cflags)
+	bm_preproc_t *result, const wchar_t *pattern, size_t len, int cflags)
 {
 	/* Initialize flags (bool variables are not false by default). */
 	result->f_ignorecase = cflags & REG_ICASE;
@@ -419,10 +419,10 @@ bm_preprocess_literal(
  */
 static int
 strip_specials(
-	wchar_t *in_pat, size_t in_len, wchar_t *out_pat, size_t *out_len,
+	const wchar_t *in_pat, size_t in_len, wchar_t *out_pat, size_t *out_len,
 	int in_flags, bm_preproc_t *out_flags)
 {
-	wchar_t *pattern = in_pat;
+	const wchar_t *pattern = in_pat;
 	size_t len = in_len;
 
 	/* If the first character is ^, set the given flag and continue. */
@@ -534,7 +534,7 @@ strip_specials(
  */
 int
 bm_preprocess_full(
-	bm_preproc_t *result, wchar_t *pattern, size_t len, int cflags)
+	bm_preproc_t *result, const wchar_t *pattern, size_t len, int cflags)
 {
 	/* We'll execute literal preprocessing on a clean pattern. */
 	wchar_t *clean_pattern = malloc(sizeof(wchar_t) * (len + 1));

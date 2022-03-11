@@ -287,8 +287,7 @@ inline static int fill_heuristics(parser_state *state, heur_t *h) {
 	    ? "HEUR_LONGEST" : "HEUR_PREFIX");
 	DEBUG_PRINTF("chosen pattern: %ls", state->wheur);
 
-        return frec_proc_literal(h->heur, state->wheur, state->wlen,
-	    state->bheur, state->blen, 0);
+	return bm_preprocess_literal(h->heur, state->wheur, state->wlen, 0);
 }
 
 /*
@@ -527,7 +526,7 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 			goto err;
 	}
 
-	h->heur = malloc(sizeof(fastmatch_t));
+	h->heur = bm_create_preproc();
 	if (!h->heur) {
 		errcode = REG_ESPACE;
 		goto err;
@@ -541,7 +540,7 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 
 err:
 	if ((errcode != REG_OK) && (h->heur != NULL))
-		frec_free_fast(h->heur);
+		bm_free_preproc(h->heur);
 
 	free_state(&state);
 	return (errcode);
@@ -552,5 +551,5 @@ frec_free_heur(heur_t *h)
 {
 
 	if (h->heur)
-		frec_free_fast(h->heur);
+		bm_free_preproc(h->heur);
 }

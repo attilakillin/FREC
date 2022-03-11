@@ -29,6 +29,7 @@
 #include <string.h>
 #include <wchar.h>
 
+#include "boyer-moore.h"
 #include "config.h"
 #include "compile.h"
 #include "convert.h"
@@ -88,7 +89,7 @@ int
 frec_compile_bm(frec_t *preg, const wchar_t *wregex, size_t wn,
     const char *regex, size_t n, int cflags)
 {
-	fastmatch_t *shortcut;
+	bm_preproc_t *shortcut;
 	int ret = REG_OK;
 
 	DEBUG_PRINT("enter");
@@ -102,18 +103,18 @@ frec_compile_bm(frec_t *preg, const wchar_t *wregex, size_t wn,
 		goto too_short;
 	}
 
-	shortcut = malloc(sizeof(fastmatch_t));
+	shortcut = bm_create_preproc();
 	if (shortcut == NULL)
 		return (REG_ESPACE);
 	ret = (cflags & REG_LITERAL)
-	    ? frec_proc_literal(shortcut, wregex, wn, regex, n, cflags)
-	    : frec_proc_fast(shortcut, wregex, wn, regex, n, cflags);
+		? bm_preprocess_literal(shortcut, wregex, wn, cflags)
+		: bm_preprocess_full(shortcut, wregex, wn, cflags);
 	if (ret == REG_OK) {
 		DEBUG_PRINT("literal matcher compiled");
 		preg->shortcut = shortcut;
 	} else {
 		DEBUG_PRINT("literal matcher did not compile");
-		free(shortcut);
+		bm_free_preproc(shortcut);
 too_short:
 		preg->shortcut = NULL;
 	}
@@ -233,11 +234,11 @@ frec_mcompile(mregex_t *preg, size_t nr, const wchar_t **wregex,
 
 		for (size_t j = 0; j < nr; j++) {
 			if (preg->patterns[j].shortcut != NULL) {
-				frags[j] = preg->patterns[j].shortcut->wpattern;
-				siz[j] = preg->patterns[j].shortcut->wlen;
+				frags[j] = preg->patterns[j].shortcut->wide.pattern;
+				siz[j] = preg->patterns[j].shortcut->wide.len;
 			} else {
-				frags[j] = ((heur_t *)(preg->patterns[j].heur))->heur->wpattern;
-				siz[j] = ((heur_t *)(preg->patterns[j].heur))->heur->wlen;
+				frags[j] = ((heur_t *)(preg->patterns[j].heur))->heur->wide.pattern;
+				siz[j] = ((heur_t *)(preg->patterns[j].heur))->heur->wide.len;
 			}
 		}
 	} else {
@@ -261,6 +262,7 @@ err:
 	if (preg->patterns) {
 		for (size_t i = 1; i < nr; i++)
 			_dist_regfree(&preg->patterns[i].orig);
+			// TODO I feel like I should clean up the bm part too.
 		free(preg->patterns);
 	}
 	if (wm)

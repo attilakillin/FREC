@@ -29,6 +29,7 @@
 #include <string.h>
 #include <wchar.h>
 
+#include "boyer-moore.h"
 #include "config.h"
 #include "match.h"
 #include "mregex.h"
@@ -152,8 +153,12 @@ frec_match_heur(regex_t *preg, heur_t *heur, const void *str,
 			seek_to(&state, state.start);
 
 			/* Match for heuristic */
-			ret = frec_match_fast(heur->heur, str, len - state.start,
-			    type, nmatch, pmatch, eflags);
+			ret = (type == STR_WIDE)
+				// TODO pmatch is wrong type
+				? bm_execute_wide(pmatch, nmatch,
+					heur->heur, str, len - state.start, eflags)
+				: bm_execute_stnd(pmatch, nmatch,
+					heur->heur, str, len - state.start, eflags);
 			if (ret != REG_OK)
 				return ret;
 
@@ -206,9 +211,12 @@ frec_match_heur(regex_t *preg, heur_t *heur, const void *str,
 
 			/* Find beginning */
 			DEBUG_PRINT("matching for prefix heuristics");
-			ret = frec_match_fast(state.heur->heur, state.str,
-			    state.len - state.start, state.type,
-			    state.nmatch, state.pmatch, state.eflags);
+			ret = (type == STR_WIDE)
+				// TODO pmatch is wrong type
+				? bm_execute_wide(state.pmatch, state.nmatch,
+					state.heur->heur, state.str, state.len - state.start, state.eflags)
+				: bm_execute_stnd(state.pmatch, state.nmatch,
+					state.heur->heur, state.str, state.len - state.start, state.eflags);
 			if (ret != REG_OK)
 				return (ret);
 
@@ -235,14 +243,16 @@ int
 frec_match(const frec_t *preg, const void *str, size_t len,
     int type, size_t nmatch, frec_match_t pmatch[], int eflags)
 {
-	fastmatch_t *shortcut = preg->shortcut;
+	bm_preproc_t *shortcut = preg->shortcut;
 	heur_t *heur = preg->heur;
 	int ret = REG_NOMATCH;
 
 	if (shortcut != NULL) {
 		DEBUG_PRINT("matching with literal matcher");
-		return (frec_match_fast(shortcut, str, len, type,
-		    nmatch, pmatch, eflags));
+		return (type == STR_WIDE)
+			// TODO Incompatible pointer types
+			? bm_execute_wide(pmatch, nmatch, shortcut, str, len, eflags)
+			: bm_execute_stnd(pmatch, nmatch, shortcut, str, len, eflags);
 	} else if (heur != NULL) {
 		DEBUG_PRINT("matching with heuristic matcher");
 		return (frec_match_heur(__DECONST(regex_t *, &preg->orig),

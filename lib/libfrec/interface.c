@@ -118,8 +118,7 @@ frec_regfree(frec_t *preg)
 	DEBUG_PRINT("enter");
 
 	if (preg->shortcut != NULL) {
-		frec_free_fast(preg->shortcut);
-		free(preg->shortcut);
+		bm_free_preproc(preg->shortcut);
 	}
 
 	if (preg->heur != NULL) {
