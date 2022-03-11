@@ -91,7 +91,7 @@
 													\
 		bm_match_t match;							\
 		char *t = text;								\
-		ret = bm_execute_stnd(&match, 1, prep, t, strlen(t), false, false);\
+		ret = bm_execute_stnd(&match, 1, prep, t, strlen(t), 0);			\
 		bm_free_preproc(prep);						\
 													\
 		ck_assert_int_eq(REG_OK, ret);				\
@@ -118,7 +118,7 @@
 		ck_assert(ret == REG_OK);					\
 													\
 		char *t = text;								\
-		ret = bm_execute_stnd(NULL, 0, prep, t, strlen(t), false, false);	\
+		ret = bm_execute_stnd(NULL, 0, prep, t, strlen(t), 0);				\
 		bm_free_preproc(prep);						\
 													\
 		ck_assert_int_eq(expected_return, ret);		\

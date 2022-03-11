@@ -301,6 +301,9 @@ bm_create_preproc()
 void
 bm_free_preproc(bm_preproc_t *prep)
 {
+	if (prep == NULL) {
+		return;
+	}
 	if (prep->stnd.goods_shifts != NULL) {
 		free(prep->stnd.goods_shifts);
 		prep->stnd.goods_shifts = NULL;

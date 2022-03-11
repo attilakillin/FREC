@@ -70,7 +70,7 @@ static bool eol_matches_wide(const wchar_t *text, size_t text_len, size_t end_po
  * Executes the turbo Boyer-Moore algorithm on the given text with the given
  * length, and stores at most nmatch number of results in the given result
  * array. Will not store matches if that flag is set.
- *
+ * Private method, called by bm_execute_stnd.
  */
 static int
 exec_turbo_bm_stnd(
@@ -141,6 +141,12 @@ exec_turbo_bm_stnd(
     return (res_cnt == 0) ? (REG_NOMATCH) : (REG_OK);
 }
 
+/*
+ * Executes the turbo Boyer-Moore algorithm on the given text with the given
+ * length, and stores at most nmatch number of results in the given result
+ * array. Will not store matches if that flag is set.
+ * Private method, called by bm_execute_wide.
+ */
 static int
 exec_turbo_bm_wide(
     bm_match_t result[], size_t nmatch,
@@ -215,21 +221,33 @@ exec_turbo_bm_wide(
     return (res_cnt == 0) ? (REG_NOMATCH) : (REG_OK);
 }
 
+/*
+ * Executes the Boyer-Moore algorithm on the given text (with the
+ * specified length) and with the given prep preprocessing struct.
+ * Stores at most nmatch results in the result array.
+ * An nmatch of 0 means that the search is executed, but only a
+ * simple REG_OK or REG_NOMATCH is returned.
+ * Execution flags can be supplied in the eflags field.
+ */
 int
 bm_execute_stnd(
-    bm_match_t result[], size_t nmatch,
-    bm_preproc_t *prep, const char *_text, size_t _len,
-    bool no_bol_anchor, bool no_eol_anchor)
+    bm_match_t result[], size_t nmatch, bm_preproc_t *prep,
+    const char *_text, size_t _len, int eflags)
 {
+    /* Set bool fields. */
     bool store_matches = !prep->f_nosub && nmatch != 0;
+    bool no_bol_anchor = eflags & REG_NOTBOL;
+    bool no_eol_anchor = eflags & REG_NOTEOL;
 
     const char *text = _text;
     size_t len = _len;
 
+    /* If we don't know the length of the text, find out. */
     if (len == (size_t) - 1) {
         len = strlen(text);
     }
 
+    /* If the prep pattern matches everything, return early. */
     if (prep->f_matchall) {
         if (store_matches) {
             result[0].soffset = 0;
@@ -238,37 +256,52 @@ bm_execute_stnd(
         return (REG_OK);
     }
 
+    /* If BOL and EOL don't match the start and end of the text, we won't
+     * accept any matches that are at the very beginning or the very end. */
     if (prep->f_linebegin && no_bol_anchor) {
         text++;
         len--;
     }
-
     if (prep->f_lineend && no_eol_anchor) {
         len--;
     }
 
+    /* If the original pattern is longer than the text, return. */
     if (prep->stnd.len > len) {
         return (REG_NOMATCH);
     }
 
+    /* Execute BM algorithm. */
     return exec_turbo_bm_stnd(result, nmatch, prep, text, len, store_matches);
 }
 
+/*
+ * Executes the Boyer-Moore algorithm on the given text (with the
+ * specified length) and with the given prep preprocessing struct.
+ * Stores at most nmatch results in the result array.
+ * An nmatch of 0 means that the search is executed, but only a
+ * simple REG_OK or REG_NOMATCH is returned.
+ * Execution flags can be supplied in the eflags field.
+ */
 int
 bm_execute_wide(
-    bm_match_t result[], size_t nmatch,
-    bm_preproc_t *prep, const wchar_t *_text, size_t _len,
-    bool no_bol_anchor, bool no_eol_anchor)
+    bm_match_t result[], size_t nmatch, bm_preproc_t *prep,
+    const wchar_t *_text, size_t _len, int eflags)
 {
+    /* Set bool fields. */
     bool store_matches = !prep->f_nosub && nmatch != 0;
+    bool no_bol_anchor = eflags & REG_NOTBOL;
+    bool no_eol_anchor = eflags & REG_NOTEOL;
 
     const wchar_t *text = _text;
     size_t len = _len;
 
+    /* If we don't know the length of the text, find out. */
     if (len == (size_t) - 1) {
         len = wcslen(text);
     }
 
+    /* If the prep pattern matches everything, return early. */
     if (prep->f_matchall) {
         if (store_matches) {
             result[0].soffset = 0;
@@ -277,18 +310,21 @@ bm_execute_wide(
         return (REG_OK);
     }
 
+    /* If BOL and EOL don't match the start and end of the text, we won't
+     * accept any matches that are at the very beginning or the very end. */
     if (prep->f_linebegin && no_bol_anchor) {
         text++;
         len--;
     }
-
     if (prep->f_lineend && no_eol_anchor) {
         len--;
     }
 
+    /* If the original pattern is longer than the text, return. */
     if (prep->wide.len > len) {
         return (REG_NOMATCH);
     }
 
+    /* Execute BM algorithm. */
     return exec_turbo_bm_wide(result, nmatch, prep, text, len, store_matches);
 }

@@ -43,14 +43,14 @@ typedef struct {
 	bm_preproc_ct stnd; /* Can be used with standard character arrays. */
 	bm_preproc_wt wide; /* Can be used with wide character arrays. */
 
-	bool f_linebegin;
-	bool f_lineend;
-	bool f_matchall;
+	bool f_linebegin;   /* The match needs to be at the start of a line. */
+	bool f_lineend;     /* The match needs to be at the end of a line. */
+	bool f_matchall;    /* The pattern matches everything. */
 
-	bool f_wholewords;
-	bool f_ignorecase;
-	bool f_newline;
-	bool f_nosub;
+	bool f_wholewords;  /* Only match whole words. */
+	bool f_ignorecase;  /* Ignore case when matching. */
+	bool f_newline;     /* Unused, line breaks can be matched by ^ or $. */
+	bool f_nosub;		/* Don't record matches, only that they exist. */
 } bm_preproc_t;
 
 
@@ -99,13 +99,11 @@ int bm_preprocess_full(
 	bm_preproc_t *result, wchar_t *pattern, size_t len, int cflags);
 
 int bm_execute_stnd(
-    bm_match_t result[], size_t nmatch,
-    bm_preproc_t *prep, const char *text, size_t len,
-    bool no_bol_anchor, bool no_eol_anchor);
+    bm_match_t result[], size_t nmatch, bm_preproc_t *prep, 
+	const char *text, size_t len, int eflags);
 int bm_execute_wide(
-    bm_match_t result[], size_t nmatch,
-    bm_preproc_t *prep, const wchar_t *text, size_t len,
-    bool no_bol_anchor, bool no_eol_anchor);
+    bm_match_t result[], size_t nmatch, bm_preproc_t *prep, 
+	const wchar_t *text, size_t len, int eflags);
 
 int	frec_proc_literal(fastmatch_t *, const wchar_t *, size_t,
 		const char *, size_t, int);
