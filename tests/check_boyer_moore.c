@@ -1,4 +1,3 @@
-
 /*-
  * Copyright (C) 2012, 2018 Gabor Kovesdan <gabor@FreeBSD.org>
  * All rights reserved.
@@ -26,11 +25,9 @@
  */
 
 #include <check.h>
-#include <tre/regex.h>
 #include <stdlib.h>
 #include <frec.h>
 
-#include "mregex.h"
 #include "boyer-moore.h"
 
 /* 

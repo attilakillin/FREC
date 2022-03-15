@@ -72,8 +72,6 @@ typedef struct parser_state {
 	bool has_lf;
 	bool has_negative_set;
 	bool starts_with_literal;
-	char *bheur;		// chosen literal
-	size_t blen;
 	wchar_t *wheur;		// chosen literal - wide
 	size_t wlen;
 } parser_state;
@@ -112,8 +110,6 @@ inline static void free_state(parser_state *state) {
 				free(state->fragments[i]);
 		free(state->fragments);
 	}
-	if (state->bheur != NULL)
-		free(state->bheur);
 	if (state->wheur != NULL)
 		free(state->wheur);
 }
@@ -274,14 +270,6 @@ inline static int fill_heuristics(parser_state *state, heur_t *h) {
 		state->wlen = state->fragment_lens[m];
 		state->fragments[m] = NULL;
 	}
-
-	/* Process chosen literal */
-	state->blen = wcstombs(NULL, state->wheur, 0);
-	state->bheur = malloc(state->blen + 1);
-	if (state->bheur == NULL)
-		return (REG_ESPACE);
-	wcstombs(state->bheur, state->wheur, state->blen);
-	state->bheur[state->blen] = '\0';
 
 	DEBUG_PRINTF("strategy: %s", h->type == HEUR_LONGEST
 	    ? "HEUR_LONGEST" : "HEUR_PREFIX");
@@ -539,7 +527,7 @@ frec_proc_heur(heur_t *h, const wchar_t *regex, size_t len, int cflags)
 	errcode = REG_OK;
 
 err:
-	if ((errcode != REG_OK) && (h->heur != NULL))
+	if ((errcode != REG_OK))
 		bm_free_preproc(h->heur);
 
 	free_state(&state);
