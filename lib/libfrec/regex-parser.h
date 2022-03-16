@@ -1,5 +1,5 @@
 #ifndef REGEX_PARSER_H
-#define REGEX_PARSER_H
+#define REGEX_PARSER_H 1
 
 #include <stdbool.h>
 

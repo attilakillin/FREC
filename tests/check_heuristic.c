@@ -35,7 +35,7 @@
 	{												\
 		heur_t prep;                            	\
 		wchar_t *patt = pattern;					\
-		int ret = frec_proc_heur(&prep, patt, wcslen(patt), flags); 	\
+		int ret = frec_preprocess_heur(&prep, patt, wcslen(patt), flags); 	\
 		ck_assert_int_eq(expected_return, ret);		\
 	}												\
 	END_TEST
@@ -45,7 +45,7 @@
 	{												\
 		heur_t prep;                            	\
 		wchar_t *patt = in_pattern;					\
-		int ret = frec_proc_heur(&prep, patt, wcslen(patt), flags); 	\
+		int ret = frec_preprocess_heur(&prep, patt, wcslen(patt), flags); 	\
 		ck_assert_int_eq(REG_OK, ret);      		\
         wchar_t *expected = ex_pattern;             \
         ret = wcscmp(ex_pattern, prep.heur->wide.pattern);              \
