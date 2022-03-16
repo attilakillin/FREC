@@ -32,6 +32,7 @@
 
 #include "boyer-moore.h"
 #include "convert.h"
+#include "regex-parser.h"
 
 /*
  * Fills the bad character shift table in the given stnd preprocessing struct.
@@ -433,9 +434,8 @@ strip_specials(
 	}
 
 	/* If the only character remaining is a $, do the same. */
-	if (pattern[0] == L'$' && len == 1) {
+	if (len >= 1 && pattern[len - 1] == L'$') {
 		out_flags->f_lineend = true;
-		pattern++;
 		len--;
 	}
 
@@ -448,72 +448,26 @@ strip_specials(
 		len -= 14;
 	}
 
-	bool escaped = false;
+	regex_parser_t parser;
+	parser.escaped = false;
+	parser.extended = in_flags & REG_EXTENDED;
+
 	size_t pos = 0;
 	/* Traverse the given pattern: */
 	for (size_t i = 0; i < len; i++) {
 		wchar_t c = pattern[i];
-		switch (c) {
-		/* If the character is a backslash, invert the escaped flag. */
-		case L'\\':
-			if (escaped) {
-				out_pat[pos] = c;
-				escaped = false;
-				pos++;
-			} else {
-				escaped = true;
-			}
-			break;
-		/* These characters have special meaning in both BRE and ERE. */
-		case L'*':
-		case L'[':
-		case L'.':
-		case L'^':
-			if (escaped) {
-				out_pat[pos] = c;
-				escaped = false;
-				pos++;
-			} else {
+		switch (parse_wchar(&parser, c)) {
+			case NORMAL_CHAR:
+				out_pat[pos++] = c;
+				break;
+			case NORMAL_NEWLINE:
+				out_pat[pos++] = '\n';
+				break;
+			case SHOULD_SKIP:
+				break;
+			/* If any special character was found, we abort. */
+			default:
 				return (REG_BADPAT);
-			}
-			break;
-		/* $ only has special meaning at the end of the pattern. */
-		case L'$':
-			if (!escaped && i == len - 1) {
-				out_flags->f_lineend = true;
-			} else {
-				out_pat[pos] = c;
-				escaped = false;
-				pos++;
-			}
-			break;
-		/* These characters behave differently in BRE and ERE. In BRE,
-		 * they have to be escaped to have special meaning, while in ERE,
-		 * they have special meaning by default and lose that when escaped. */
-		case L'+':
-		case L'?':
-		case L'|':
-		case L'(':
-		case L'{':
-			/* Meaning: escaped and extended, OR not escaped and basic. */
-			if (escaped ^ !(in_flags & REG_EXTENDED)) {
-				out_pat[pos] = c;
-				escaped = false;
-				pos++;
-			} else {
-				return (REG_BADPAT);
-			}
-			break;
-		/* For any other character, only abort when the previous character
-		 * was a backslash. */
-		default:
-			if (escaped) {
-				return (REG_BADPAT);
-			} else {
-				out_pat[pos] = c;
-				pos++;
-			}
-			break;
 		}
 	}
 
