@@ -17,10 +17,59 @@ typedef struct {
     bool has_literal_prefix;
 } heur_parser;
 
-static int
-end_segment(heur_parser *state, wchar_t *fragment, size_t len)
+static heur_parser *
+create_heur_parser(int cflags)
 {
-    if (len == 0) {
+    heur_parser *parser = malloc(sizeof(heur_parser));
+    if (parser == NULL) {
+        return NULL;
+    }
+
+    parser->fragments = malloc(sizeof(wchar_t *) * MAX_FRAGMENTS);
+    if (parser->fragments == NULL) {
+        free(parser);
+        return NULL;
+    }
+
+    parser->fragment_lens = malloc(sizeof(size_t) * MAX_FRAGMENTS);
+    if (parser->fragment_lens == NULL) {
+        free(parser->fragments);
+        free(parser);
+        return NULL;
+    }
+    
+    parser->next_index = 0;
+
+    parser->reg_newline_set = cflags & REG_NEWLINE;
+    parser->may_contain_lf = false;
+    parser->has_literal_prefix = true;
+
+    return parser;
+}
+
+static void
+free_heur_parser(heur_parser *parser)
+{
+    if (parser != NULL) {
+        if (parser->fragments != NULL) {
+            for (size_t i = 0; i < parser->next_index; i++) {
+                if (parser->fragments[i] != NULL) {
+                    free(parser->fragments[i]);
+                }
+            }
+            free(parser->fragments);
+        }
+        if (parser->fragment_lens != NULL) {
+            free(parser->fragment_lens);
+        }
+        free(parser);
+    }
+}
+
+static int
+end_segment(heur_parser *state, wchar_t *fragment, size_t pos)
+{
+    if (pos == 0) {
         if (state->next_index == 0) {
             state->has_literal_prefix = false;
         }
@@ -33,16 +82,16 @@ end_segment(heur_parser *state, wchar_t *fragment, size_t len)
     }
 
     /* Store the pointed fragment in storage. */
-    wchar_t *storage = malloc(sizeof(wchar_t) * (len + 1));
+    wchar_t *storage = malloc(sizeof(wchar_t) * (pos + 1));
     if (storage == NULL) {
         return (REG_ESPACE);
     }
 
-    memcpy(storage, fragment, sizeof(wchar_t) * len);
-    storage[len] = L'\0';
+    memcpy(storage, fragment, sizeof(wchar_t) * pos);
+    storage[pos] = L'\0';
 
     state->fragments[state->next_index] = storage;
-    state->fragment_lens[state->next_index] = len;
+    state->fragment_lens[state->next_index] = pos;
     state->next_index++;
 
     return (REG_OK);
@@ -71,11 +120,12 @@ handle_square_bracket(
         pos++;
     }
 
-    *iter = pos + 1;
+    *iter = pos;
+    return (REG_OK);
 }
 
 static int
-handle_enclosed_area(
+handle_enclosure(
     heur_parser *state, const wchar_t *pattern, size_t len, size_t *iter,
     wchar_t opening, wchar_t closing)
 {
@@ -89,7 +139,7 @@ handle_enclosed_area(
             depth++;
         } else if (c == closing) {
             depth--;
-        } else if (c == L'.' || L'\n') {
+        } else if (c == L'.' || c == L'\n') {
             state->may_contain_lf = true;
         }
         
@@ -99,13 +149,14 @@ handle_enclosed_area(
         pos++;
     }
 
-    *iter = pos + 1;
+    *iter = pos;
+    return (REG_OK);
 }
 
 static int
 build_bm_from_best_fragment(heur_parser *state, heur_t *target)
 {
-    if (/*tlen > 0 ||*/ state->reg_newline_set || !state->may_contain_lf) {
+    if (target->max_length > 0 || state->reg_newline_set || !state->may_contain_lf) {
         target->heur_type = HEUR_LONGEST;
     } else if (state->has_literal_prefix) {
         target->heur_type = HEUR_PREFIX;
@@ -146,20 +197,10 @@ frec_preprocess_heur(
     heur_t *heur, const wchar_t *pattern, size_t len, int cflags)
 {
     /* Initialize heuristic parser state. */
-    heur_parser state;
-    state.fragments = malloc(sizeof(wchar_t *) * MAX_FRAGMENTS);
-    if (state.fragments == NULL) {
+    heur_parser *state = create_heur_parser(cflags);
+    if (state == NULL) {
         return (REG_ESPACE);
     }
-    state.fragment_lens = malloc(sizeof(size_t) * MAX_FRAGMENTS);
-    if (state.fragment_lens == NULL) {
-        // TODO FREE
-        return (REG_ESPACE);
-    }
-    state.next_index = 0;
-    state.reg_newline_set = cflags & REG_NEWLINE;
-    state.may_contain_lf = false;
-    state.has_literal_prefix = true;
 
     long max_length = 0;
     bool variable_len = false;
@@ -167,7 +208,7 @@ frec_preprocess_heur(
     /* These will store the current fragment and its length. */
     wchar_t *cfragment = malloc(sizeof(wchar_t) * len);
     if (cfragment == NULL) {
-        // TODO FREE
+        free_heur_parser(state);
         return (REG_ESPACE);
     }
     size_t cpos = 0;
@@ -185,92 +226,109 @@ frec_preprocess_heur(
 
         /* Execute preliminary actions. */
         switch (result) {
-        /* Save a normal character or a newline. */
-        case NORMAL_CHAR:
-            cfragment[cpos++] = c;
-            max_length++;
-            break;
-        case NORMAL_NEWLINE:
-            cfragment[cpos++] = L'\n';
-            max_length++;
-            state.may_contain_lf = true;
-            break;
-        /* Skip when we should skip any action. */
-        case SHOULD_SKIP:
-            break;
-        /* In case of a bad pattern or a | char (unsupported), return. */
-        case BAD_PATTERN:
-        case SPEC_PIPE:
-            // TODO FREE
-            return (REG_BADPAT);
-        /* The special characters make the last literal char optional. */
-        case SPEC_CURLYBRACE:
-        case SPEC_ASTERISK:
-        case SPEC_QMARK:
-            cpos = (cpos <= 0) ? (0) : (cpos - 1);
-        /* The above and these others make the pattern variable length. */
-        case SPEC_PLUS:
-        case SPEC_PAREN:
-            variable_len = true;
-        /* In the above cases and for any other special character,
-         * we need to end the current literal segment. */
-        default:
-            ret = end_segment(&state, cfragment, cpos);
-            if (ret != REG_OK) {
-                // TODO FREE
-                return ret;
-            }
-            cpos = 0;
-            break;
+            /* Save a normal character or a newline. */
+            case NORMAL_CHAR:
+                cfragment[cpos++] = c;
+                max_length++;
+                break;
+            case NORMAL_NEWLINE:
+                cfragment[cpos++] = L'\n';
+                max_length++;
+                state->may_contain_lf = true;
+                break;
+            /* Skip when we should skip any action. */
+            case SHOULD_SKIP:
+                break;
+            /* In case of a bad pattern or a | char (unsupported), return. */
+            case BAD_PATTERN:
+            case SPEC_PIPE:
+                free(cfragment);
+                free_heur_parser(state);
+                return (REG_BADPAT);
+            /* The special characters make the last literal char optional. */
+            case SPEC_CURLYBRACE:
+            case SPEC_ASTERISK:
+            case SPEC_QMARK:
+                cpos = (cpos <= 0) ? (0) : (cpos - 1);
+            /* The above and these others make the pattern variable length. */
+            case SPEC_PLUS:
+            case SPEC_PAREN:
+                variable_len = true;
+            /* In the above cases and for any other special character,
+            * we need to end the current literal segment. */
+            default:
+                ret = end_segment(state, cfragment, cpos);
+                if (ret != REG_OK) {
+                    free(cfragment);
+                    free_heur_parser(state);
+                    return ret;
+                }
+                cpos = 0;
+                break;
         }
 
         /* Execute extra actions. For a few special characters, we need to
          * do extra work before continuing on to the next character. */
         switch (result) {
-        /* A . any character operator may include line feeds. */
-        case SPEC_DOT:
-            state.may_contain_lf = true;
-            max_length++;
-            break;
-        /* On a [ character, we need to advance our iterator. */
-        case SPEC_BRACKET:
-            ret = handle_square_bracket(&state, pattern, len, &i);
-            max_length++;
-            break;
-        /* On a ( or a { we advance too, but with a different logic. */
-        case SPEC_PAREN:
-            ret = handle_enclosed_area(&state, pattern, len, &i, L'(', L')');
-            break;
-        case SPEC_CURLYBRACE:
-            ret = handle_enclosed_area(&state, pattern, len, &i, L'{', L'}');
-            break;
+            /* A . any character operator may include line feeds. */
+            case SPEC_DOT:
+                state->may_contain_lf = true;
+                max_length++;
+                break;
+            /* On a [ character, we need to advance our iterator. */
+            case SPEC_BRACKET:
+                ret = handle_square_bracket(state, pattern, len, &i);
+                max_length++;
+                break;
+            /* On a ( or a { we advance too, but with a different logic. */
+            case SPEC_PAREN:
+                ret = handle_enclosure(state, pattern, len, &i, L'(', L')');
+                break;
+            case SPEC_CURLYBRACE:
+                ret = handle_enclosure(state, pattern, len, &i, L'{', L'}');
+                break;
         }
 
         /* If any of the extra actions failed, we return. */
         if (ret != REG_OK) {
-            // TODO FREE
+            free(cfragment);
+            free_heur_parser(state);
             return ret;
         }
     }
 
     /* If the last segment was not finished, we finish it. */
     if (cpos > 0) {
-        ret = end_segment(&state, cfragment, cpos);
+        ret = end_segment(state, cfragment, cpos);
         if (ret != REG_OK) {
-            // TODO FREE
+            free(cfragment);
+            free_heur_parser(state);
             return ret;
         }
     }
 
     heur->literal_prep = bm_create_preproc();
     if (heur->literal_prep == NULL) {
-        // TODO FREE
+        free(cfragment);
+        free_heur_parser(state);
         return (REG_ESPACE);
     }
 
-    heur->max_length = (variable_len) ? -1 : max_length;
-    ret = build_bm_from_best_fragment(&state, heur);
+    heur->max_length = (variable_len) ? (-1) : (max_length);
+    ret = build_bm_from_best_fragment(state, heur);
+    if (ret != REG_OK) {
+        bm_free_preproc(heur->literal_prep);
+    }
 
-    // TODO FREE
+    free(cfragment);
+    free_heur_parser(state);
     return ret;
+}
+
+void
+frec_free_heur(heur_t *heur)
+{
+    if (heur != NULL) {
+        bm_free_preproc(heur->literal_prep);
+    }
 }

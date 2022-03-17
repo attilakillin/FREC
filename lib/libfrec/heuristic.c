@@ -533,11 +533,11 @@ err:
 	free_state(&state);
 	return (errcode);
 }
-
+/*
 void
 frec_free_heur(heur_t *h)
 {
 
 	if (h->heur)
 		bm_free_preproc(h->heur);
-}
+}*/

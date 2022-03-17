@@ -25,6 +25,6 @@ int frec_proc_heur(
 
 int frec_preprocess_heur(
 	heur_t *heur, const wchar_t *pattern, size_t len, int cflags);
-extern void	frec_free_heur(heur_t *h);
+void frec_free_heur(heur_t *h);
 
 #endif

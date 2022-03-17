@@ -35,8 +35,9 @@
 	{												\
 		heur_t prep;                            	\
 		wchar_t *patt = pattern;					\
-		int ret = frec_preprocess_heur(&prep, patt, wcslen(patt), flags); 	\
-		ck_assert_int_eq(expected_return, ret);		\
+		int prep_ret = frec_preprocess_heur(&prep, patt, wcslen(patt), flags); 	\
+		ck_assert_int_eq(expected_return, prep_ret);\
+		frec_free_heur(&prep);						\
 	}												\
 	END_TEST
 
@@ -45,11 +46,12 @@
 	{												\
 		heur_t prep;                            	\
 		wchar_t *patt = in_pattern;					\
-		int ret = frec_preprocess_heur(&prep, patt, wcslen(patt), flags); 	\
-		ck_assert_int_eq(REG_OK, ret);      		\
+		int prep_ret = frec_preprocess_heur(&prep, patt, wcslen(patt), flags); 	\
+		ck_assert_int_eq(REG_OK, prep_ret);      	\
         wchar_t *expected = ex_pattern;             \
-        ret = wcscmp(ex_pattern, prep.heur->wide.pattern);              \
-        ck_assert_int_eq(0, ret);                   \
+        int cmp = wcscmp(ex_pattern, prep.literal_prep->wide.pattern);          \
+        ck_assert_int_eq(0, cmp);                   \
+		frec_free_heur(&prep);						\
 	}												\
 	END_TEST
 
@@ -68,10 +70,41 @@ HEUR_TEST_RETURN(
 	L"(prefix)? with pattern", REG_EXTENDED, REG_OK
 )
 
-
 HEUR_TEST_SELECTED_PATTERN(
     test_heur_prep__literal_has_correct_bm_pattern,
     L"literal pattern", 0, L"literal pattern"
+)
+
+
+HEUR_TEST_SELECTED_PATTERN(
+    test_heur_prep__prefix_has_correct_bm_pattern__bracket_bre,
+    L"literal[opt]", 0, L"literal"
+)
+
+HEUR_TEST_SELECTED_PATTERN(
+    test_heur_prep__prefix_has_correct_bm_pattern__bracket_ere,
+    L"literal[opt]", REG_EXTENDED, L"literal"
+)
+
+HEUR_TEST_SELECTED_PATTERN(
+    test_heur_prep__prefix_has_correct_bm_pattern__bracket_caret,
+    L"literal[^opt]", REG_EXTENDED, L"literal"
+)
+
+
+HEUR_TEST_SELECTED_PATTERN(
+    test_heur_prep__longest_has_correct_bm_pattern__bracket_bre,
+    L"[opt]literal", 0, L"literal"
+)
+
+HEUR_TEST_SELECTED_PATTERN(
+    test_heur_prep__longest_has_correct_bm_pattern__bracket_ere,
+    L"[opt]literal", REG_EXTENDED, L"literal"
+)
+
+HEUR_TEST_SELECTED_PATTERN(
+    test_heur_prep__longest_has_correct_bm_pattern__bracket_caret,
+    L"[^opt]literal", REG_EXTENDED, L"literal"
 )
 
 Suite *create_heur_suite()
@@ -87,6 +120,16 @@ Suite *create_heur_suite()
 
     /* Literal tests. */
     tcase_add_test(tc_prep, test_heur_prep__literal_has_correct_bm_pattern);
+
+	/* Prefix tests. */
+    tcase_add_test(tc_prep, test_heur_prep__prefix_has_correct_bm_pattern__bracket_bre);
+    tcase_add_test(tc_prep, test_heur_prep__prefix_has_correct_bm_pattern__bracket_ere);
+    tcase_add_test(tc_prep, test_heur_prep__prefix_has_correct_bm_pattern__bracket_caret);
+
+	/* Longest tests. */
+    tcase_add_test(tc_prep, test_heur_prep__longest_has_correct_bm_pattern__bracket_ere);
+    tcase_add_test(tc_prep, test_heur_prep__longest_has_correct_bm_pattern__bracket_caret);
+    tcase_add_test(tc_prep, test_heur_prep__longest_has_correct_bm_pattern__bracket_bre);
 
 	suite_add_tcase(suite, tc_prep);
 
