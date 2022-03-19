@@ -1,2 +1,0 @@
-SUBDIRS= libfrec
-#libgrep

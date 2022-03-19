@@ -1,1 +1,1 @@
-SUBDIRS=lib bin tests
+SUBDIRS=libfrec bin
