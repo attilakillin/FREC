@@ -149,7 +149,7 @@ frec_match_heur(regex_t *preg, heur_t *heur, const void *str,
 	 * REG_NEWLINE: looking for the longest fragment and then
 	 * isolate the line and run the automaton.
 	 */
-	if (heur->type == HEUR_LONGEST) {
+	if (heur->heur_type == HEUR_LONGEST) {
 		DEBUG_PRINT("using HEUR_LONGEST strategy");
 		while (state.start < state.len) {
 			size_t eo, so;
@@ -160,9 +160,9 @@ frec_match_heur(regex_t *preg, heur_t *heur, const void *str,
 			ret = (type == STR_WIDE)
 				// TODO pmatch is wrong type
 				? bm_execute_wide(pmatch, nmatch,
-					heur->heur, str, len - state.start, eflags)
+					heur->literal_prep, str, len - state.start, eflags)
 				: bm_execute_stnd(pmatch, nmatch,
-					heur->heur, str, len - state.start, eflags);
+					heur->literal_prep, str, len - state.start, eflags);
 			if (ret != REG_OK)
 				return ret;
 
@@ -170,7 +170,7 @@ frec_match_heur(regex_t *preg, heur_t *heur, const void *str,
 			 * If we do not know the length of the possibly matching part,
 			 * look for newlines.
 			 */
-			if (heur->tlen == -1) {
+			if (heur->max_length == -1) {
 				so = search_lf_backward(&state, pmatch[0].soffset);
 				eo = search_lf_forward(&state, pmatch[0].soffset);
 			}
@@ -180,7 +180,7 @@ frec_match_heur(regex_t *preg, heur_t *heur, const void *str,
 			 * context that we can, without looking for explicit newlines.
 			 */
 			else {
-				state.rem = heur->tlen - (pmatch[0].soffset -
+				state.rem = heur->max_length - (pmatch[0].soffset -
 				    pmatch[0].soffset);
 
 				so = state.start + pmatch[0].soffset <= state.rem ? 0 :
@@ -218,9 +218,9 @@ frec_match_heur(regex_t *preg, heur_t *heur, const void *str,
 			ret = (type == STR_WIDE)
 				// TODO pmatch is wrong type
 				? bm_execute_wide(state.pmatch, state.nmatch,
-					state.heur->heur, state.str, state.len - state.start, state.eflags)
+					state.heur->literal_prep, state.str, state.len - state.start, state.eflags)
 				: bm_execute_stnd(state.pmatch, state.nmatch,
-					state.heur->heur, state.str, state.len - state.start, state.eflags);
+					state.heur->literal_prep, state.str, state.len - state.start, state.eflags);
 			if (ret != REG_OK)
 				return (ret);
 
@@ -266,6 +266,19 @@ frec_match(const frec_t *preg, const void *str, size_t len,
 	DEBUG_PRINT("matching with automaton matcher");
 	ret = call_regexec(&preg->orig, str, len, type, nmatch, pmatch, eflags);
 	return (ret);
+}
+
+int
+frec_match_stnd(frec_match_t pmatch[], size_t nmatch,
+	const frec_t *prep, const char *text, size_t len, int eflags)
+{
+	if (prep->bm_prep != NULL) {
+		return bm_execute_stnd(pmatch, nmatch, prep->bm_prep, text, len, eflags);
+	} else if (prep->heur != NULL) {
+		// TODO
+	} else {
+		return call_regexec(&prep->orig, text, len, STR_BYTE, nmatch, pmatch, eflags);
+	}
 }
 
 int
@@ -396,8 +409,8 @@ finish1:
 			 * First subcase; possibly matching pattern is
 			 * fixed-length.
 			 */
-			if (preg->patterns[rpm.p].heur->tlen != -1) {
-				size_t rem = preg->patterns[rpm.p].heur->tlen
+			if (preg->patterns[rpm.p].heur->max_length != -1) {
+				size_t rem = preg->patterns[rpm.p].heur->max_length
 				    - (rpm.soffset - rpm.soffset);
 
 				int so = st + rpm.soffset <= rem ? 0 :

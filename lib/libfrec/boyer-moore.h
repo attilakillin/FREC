@@ -49,8 +49,10 @@ typedef struct {
 	bool f_nosub;		/* Don't record matches, only that they exist. */
 } bm_preproc_t;
 
+
 bm_preproc_t *bm_create_preproc();
 void bm_free_preproc(bm_preproc_t *prep);
+
 int bm_preprocess_literal(
 	bm_preproc_t *result, const wchar_t *pattern, size_t len, int cflags);
 int bm_preprocess_full(

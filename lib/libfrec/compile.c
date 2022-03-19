@@ -83,13 +83,14 @@ compile_heuristic(
     }
 
     /* Execute heuristic compilation. */
-    int ret = frec_proc_heur(heur, pattern, len, cflags);
+    int ret = frec_preprocess_heur(heur, pattern, len, cflags);
     
     /* If valid, set the relevant return field, else free the struct. */
     if (ret == REG_OK) {
         frec->heur = heur;
     } else {
         frec->heur = NULL;
+        frec_free_heur(heur);
         free(heur);
     }
 
@@ -183,7 +184,7 @@ frec_mcompile(mregex_t *mfrec, size_t k,
         for (size_t i = 0; i < k; i++) {
             frec_t *curr = &mfrec->patterns[i];
             if (curr->bm_prep == NULL && 
-                (curr->heur == NULL || curr->heur->type != HEUR_LONGEST)) {
+                (curr->heur == NULL || curr->heur->heur_type != HEUR_LONGEST)) {
                     mfrec->type = MHEUR_NONE;
                     return (REG_OK);
                 }
@@ -226,8 +227,8 @@ frec_mcompile(mregex_t *mfrec, size_t k,
                 pat_ptrs[i] = curr->bm_prep->wide.pattern;
                 len_ptrs[i] = curr->bm_prep->wide.len;
             } else {
-                pat_ptrs[i] = curr->heur->heur->wide.pattern;
-                len_ptrs[i] = curr->heur->heur->wide.len;
+                pat_ptrs[i] = curr->heur->literal_prep->wide.pattern;
+                len_ptrs[i] = curr->heur->literal_prep->wide.len;
             }
         }
 
