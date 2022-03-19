@@ -35,7 +35,7 @@
 #include "heuristic.h"
 #include "match.h"
 #include "mregex.h"
-#include "frec.h"
+#include "frec2.h"
 #include "wu-manber.h"
 
 int
@@ -93,16 +93,16 @@ frec_regfree(frec_t *preg)
 
 	DEBUG_PRINT("enter");
 
-	if (preg->shortcut != NULL) {
-		bm_free_preproc(preg->shortcut);
+	if (preg->boyer_moore != NULL) {
+		bm_free_preproc(preg->boyer_moore);
 	}
 
-	if (preg->heur != NULL) {
-		frec_free_heur(preg->heur);
-		free(preg->heur);
+	if (preg->heuristic != NULL) {
+		frec_free_heur(preg->heuristic);
+		free(preg->heuristic);
 	}
 
-	_dist_regfree(&preg->orig);
+	_dist_regfree(&preg->original);
 }
 
 typedef struct regexec_state {

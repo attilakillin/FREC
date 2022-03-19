@@ -4,7 +4,7 @@
 #include <sys/types.h>
 #include <wchar.h>
 
-#include "frec.h"
+#include "frec2.h"
 
 /* Isn't mfrec_t a better name? */
 typedef struct {

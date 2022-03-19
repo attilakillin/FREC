@@ -33,8 +33,10 @@ AC_CHECK_HEADERS_ONCE([tre/regex.h])
 
 # Set project configuration headers and Makefiles
 AC_CONFIG_HEADERS([config.h])
+
+# TODO Reinclude these:  bin/Makefile bin/grep/Makefile  when it all works
 AC_CONFIG_FILES(m4_normalize([
-    Makefile bin/Makefile bin/grep/Makefile
+    Makefile
     libfrec/Makefile libfrec/lib/Makefile libfrec/tests/Makefile
 ]))
 

@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <wchar.h>
 
-#include "frec.h"
+#include "frec2.h"
 #include "mregex.h"
 
 #define WM_MAXPAT 64

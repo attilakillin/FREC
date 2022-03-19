@@ -10,7 +10,7 @@
 #define HEUR_PREFIX		0
 #define HEUR_LONGEST		1
 
-typedef struct {
+typedef struct heur_t {
 	bm_preproc_t *literal_prep;	/* BM prep struct for the longest literal fragment of the pattern. */
 	long max_length;			/* The maximum possible length of the pattern. -1 if not bound. */
 	int heur_type;				/* The type of the heuristic. */

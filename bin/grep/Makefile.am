@@ -1,6 +1,6 @@
 bin_PROGRAMS=grep
 grep_SOURCES=file.c grep.c queue.c util.c
-grep_CPPFLAGS=-I../../libfrec/lib
+grep_CPPFLAGS=-I../../libfrec/include
 grep_LDADD=-lfrec -ltre
 grep_LDFLAGS=-L../../libfrec/lib
 

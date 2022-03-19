@@ -35,7 +35,7 @@ typedef struct {
  * Contains the complete compiled output of the Boyer-Moore preprocessing
  * phase. After a full compilation, both primary data members are filled.
  */
-typedef struct {
+typedef struct bm_preproc_t {
 	bm_preproc_ct stnd; /* Can be used with standard character arrays. */
 	bm_preproc_wt wide; /* Can be used with wide character arrays. */
 

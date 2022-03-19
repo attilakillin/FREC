@@ -4,7 +4,7 @@
 #include <tre/regex.h>
 
 #include "config.h"
-#include "frec.h"
+#include "frec2.h"
 
 int	frec_match(const frec_t *preg, const void *str, size_t len,
 	    int type, size_t nmatch, frec_match_t pmatch[], int eflags);

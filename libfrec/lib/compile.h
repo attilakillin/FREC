@@ -5,7 +5,7 @@
 #include <wchar.h>
 
 #include "mregex.h"
-#include "frec.h"
+#include "frec2.h"
 
 int
 frec_compile(frec_t *frec, const wchar_t *pattern, size_t len, int cflags);

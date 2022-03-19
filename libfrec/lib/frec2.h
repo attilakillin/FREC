@@ -4,10 +4,13 @@
 #include <sys/param.h>
 #include <stdio.h>
 
+#include <frec.h>
+
 #include "boyer-moore.h"
 #include "config.h"
 #include "frec-match.h"
 #include "heuristic.h"
+
 
 #define STR_BYTE	0
 #define STR_MBS		1
@@ -22,7 +25,7 @@
 #endif
 
 // TODO Document this struct
-typedef struct {
+/*typedef struct {
 	regex_t orig;
 	bm_preproc_t *shortcut;
 	bm_preproc_t *bm_prep;
@@ -30,6 +33,6 @@ typedef struct {
 	const char *re_endp;
 	const wchar_t *re_wendp;
 	int cflags;
-} frec_t;
+} frec_t;*/
 
 #endif /* FREC_H */

@@ -30,7 +30,7 @@
 #include <wchar.h>
 
 #include "boyer-moore.h"
-#include "frec.h"
+#include "frec2.h"
 #include "mregex.h"
 #include "wu-manber.h"
 
@@ -45,7 +45,7 @@ compile_boyer_moore(
 {
     /* If the pattern is too short, literal matching is inefficient. */
     if (len < 2) {
-        frec->bm_prep = NULL;
+        frec->boyer_moore = NULL;
     }
 
     bm_preproc_t *prep = bm_create_preproc();
@@ -59,9 +59,9 @@ compile_boyer_moore(
     
     /* If valid, set the relevant return field, else free the struct. */
     if (ret == REG_OK) {
-        frec->bm_prep = prep;
+        frec->boyer_moore = prep;
     } else {
-        frec->bm_prep = NULL;
+        frec->boyer_moore = NULL;
         bm_free_preproc(prep);
     }
 
@@ -87,9 +87,9 @@ compile_heuristic(
     
     /* If valid, set the relevant return field, else free the struct. */
     if (ret == REG_OK) {
-        frec->heur = heur;
+        frec->heuristic = heur;
     } else {
-        frec->heur = NULL;
+        frec->heuristic = NULL;
         frec_free_heur(heur);
         free(heur);
     }
@@ -112,7 +112,7 @@ frec_compile(frec_t *frec, const wchar_t *pattern, size_t len, int cflags)
     /* Compile NFA using our regex library. If we can't optimize, we
      * can still use this original struct, and this way, we validate
      * the pattern automatically. */
-    int ret = _dist_regwncomp(&frec->orig, pattern, len, cflags);
+    int ret = _dist_regwncomp(&frec->original, pattern, len, cflags);
     if (ret != REG_OK) {
         return ret;
     }
@@ -124,7 +124,7 @@ frec_compile(frec_t *frec, const wchar_t *pattern, size_t len, int cflags)
     if (ret != REG_OK && !(cflags & REG_LITERAL)) {
         compile_heuristic(frec, pattern, len, cflags);
     } else {
-        frec->heur = NULL;
+        frec->heuristic = NULL;
     }
 
     /* We save the compilation flags. At this point, at least
@@ -183,8 +183,8 @@ frec_mcompile(mregex_t *mfrec, size_t k,
          * If not, we can't speed up the multiple pattern matcher. */
         for (size_t i = 0; i < k; i++) {
             frec_t *curr = &mfrec->patterns[i];
-            if (curr->bm_prep == NULL && 
-                (curr->heur == NULL || curr->heur->heur_type != HEUR_LONGEST)) {
+            if (curr->boyer_moore == NULL && 
+                (curr->heuristic == NULL || curr->heuristic->heur_type != HEUR_LONGEST)) {
                     mfrec->type = MHEUR_NONE;
                     return (REG_OK);
                 }
@@ -223,12 +223,12 @@ frec_mcompile(mregex_t *mfrec, size_t k,
         /* Reference values from previous optimalizations. */
         for (size_t i = 0; i < k; i++) {
             frec_t *curr = &mfrec->patterns[i];
-            if (curr->bm_prep != NULL) {
-                pat_ptrs[i] = curr->bm_prep->wide.pattern;
-                len_ptrs[i] = curr->bm_prep->wide.len;
+            if (curr->boyer_moore != NULL) {
+                pat_ptrs[i] = curr->boyer_moore->wide.pattern;
+                len_ptrs[i] = curr->boyer_moore->wide.len;
             } else {
-                pat_ptrs[i] = curr->heur->literal_prep->wide.pattern;
-                len_ptrs[i] = curr->heur->literal_prep->wide.len;
+                pat_ptrs[i] = curr->heuristic->literal_prep->wide.pattern;
+                len_ptrs[i] = curr->heuristic->literal_prep->wide.len;
             }
         }
 

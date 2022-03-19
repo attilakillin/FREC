@@ -34,7 +34,7 @@
 #include "match.h"
 #include "mregex.h"
 #include "regexec.h"
-#include "frec.h"
+#include "frec2.h"
 #include "wu-manber.h"
 
 typedef struct matcher_state {
@@ -247,8 +247,8 @@ int
 frec_match(const frec_t *preg, const void *str, size_t len,
     int type, size_t nmatch, frec_match_t pmatch[], int eflags)
 {
-	bm_preproc_t *shortcut = preg->shortcut;
-	heur_t *heur = preg->heur;
+	bm_preproc_t *shortcut = preg->boyer_moore;
+	heur_t *heur = preg->heuristic;
 	int ret = REG_NOMATCH;
 
 	if (shortcut != NULL) {
@@ -259,12 +259,12 @@ frec_match(const frec_t *preg, const void *str, size_t len,
 			: bm_execute_stnd(pmatch, nmatch, shortcut, str, len, eflags);
 	} else if (heur != NULL) {
 		DEBUG_PRINT("matching with heuristic matcher");
-		return (frec_match_heur(__DECONST(regex_t *, &preg->orig),
+		return (frec_match_heur(__DECONST(regex_t *, &preg->original),
 		    heur, str, len, type, nmatch, pmatch, eflags));
 	}
 
 	DEBUG_PRINT("matching with automaton matcher");
-	ret = call_regexec(&preg->orig, str, len, type, nmatch, pmatch, eflags);
+	ret = call_regexec(&preg->original, str, len, type, nmatch, pmatch, eflags);
 	return (ret);
 }
 
@@ -272,12 +272,12 @@ int
 frec_match_stnd(frec_match_t pmatch[], size_t nmatch,
 	const frec_t *prep, const char *text, size_t len, int eflags)
 {
-	if (prep->bm_prep != NULL) {
-		return bm_execute_stnd(pmatch, nmatch, prep->bm_prep, text, len, eflags);
-	} else if (prep->heur != NULL) {
+	if (prep->boyer_moore != NULL) {
+		return bm_execute_stnd(pmatch, nmatch, prep->boyer_moore, text, len, eflags);
+	} else if (prep->heuristic != NULL) {
 		// TODO
 	} else {
-		return call_regexec(&prep->orig, text, len, STR_BYTE, nmatch, pmatch, eflags);
+		return call_regexec(&prep->original, text, len, STR_BYTE, nmatch, pmatch, eflags);
 	}
 }
 
@@ -409,8 +409,8 @@ finish1:
 			 * First subcase; possibly matching pattern is
 			 * fixed-length.
 			 */
-			if (preg->patterns[rpm.p].heur->max_length != -1) {
-				size_t rem = preg->patterns[rpm.p].heur->max_length
+			if (preg->patterns[rpm.p].heuristic->max_length != -1) {
+				size_t rem = preg->patterns[rpm.p].heuristic->max_length
 				    - (rpm.soffset - rpm.soffset);
 
 				int so = st + rpm.soffset <= rem ? 0 :

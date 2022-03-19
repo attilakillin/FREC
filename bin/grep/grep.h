@@ -30,7 +30,7 @@
  */
 
 #include <limits.h>
-#include <mregex.h>
+#include <frec.h>
 #include <stdbool.h>
 #include <stdio.h>
 
