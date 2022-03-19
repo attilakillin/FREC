@@ -25,12 +25,12 @@ autom4te.cache/
 
 # Ignore build binaries
 bin/grep/grep
-lib/libfrec/libfrec.a
+libfrec/lib/libfrec.a
 
 # Ignore all test files and reinclude the makefile and the source files
-tests/**
-!tests/**.c
-!tests/**.Makefile.am
+libfrec/tests/**
+!libfrec/tests/**.c
+!libfrec/tests/**.Makefile.am
 
 # Ignore IDE-specific folders and files
 .vscode/
