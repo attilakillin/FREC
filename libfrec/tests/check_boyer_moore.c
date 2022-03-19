@@ -27,6 +27,7 @@
 #include <check.h>
 #include <stdlib.h>
 #include <frec.h>
+#include <tre/regex.h>
 
 #include "boyer-moore.h"
 

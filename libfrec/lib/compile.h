@@ -4,14 +4,9 @@
 #include <sys/types.h>
 #include <wchar.h>
 
-#include "mregex.h"
-#include "frec2.h"
+#include "frec-internal.h"
 
-int
-frec_compile(frec_t *frec, const wchar_t *pattern, size_t len, int cflags);
-
-int
-frec_mcompile(mregex_t *mfrec, size_t k,
-	const wchar_t **patterns, size_t *lens, int cflags);
+int frec_compile(frec_t *frec, const wchar_t *pattern, size_t len, int cflags);
+int frec_mcompile(mfrec_t *mfrec, size_t k, const wchar_t **patterns, size_t *lens, int cflags);
 
 #endif

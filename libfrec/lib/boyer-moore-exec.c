@@ -29,6 +29,7 @@
 #include <wctype.h>
 
 #include "boyer-moore.h"
+#include "config.h"
 
 /* Utility functions. */
 static int max(int a, int b) { return (a > b) ? a : b; }

@@ -25,12 +25,12 @@
  */
 
 #include <sys/types.h>
+#include <tre/regex.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
 
 #include "convert.h"
-#include "frec.h"
 
 /*
  * Converts a string in multibyte representation (mbs) with a length

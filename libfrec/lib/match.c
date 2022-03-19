@@ -32,9 +32,7 @@
 #include "boyer-moore.h"
 #include "config.h"
 #include "match.h"
-#include "mregex.h"
-#include "regexec.h"
-#include "frec2.h"
+#include "frec-internal.h"
 #include "wu-manber.h"
 
 typedef struct matcher_state {
@@ -283,7 +281,7 @@ frec_match_stnd(frec_match_t pmatch[], size_t nmatch,
 
 int
 frec_mmatch(const void *str, size_t len, int type, size_t nmatch,
-    frec_match_t pmatch[], int eflags, const mregex_t *preg)
+    frec_match_t pmatch[], int eflags, const mfrec_t *preg)
 {
 	const wchar_t *str_wide = str;
 	const char *str_byte = str;
@@ -363,7 +361,7 @@ frec_mmatch(const void *str, size_t len, int type, size_t nmatch,
 			for (i = 0; i < nmatch; i++) {
 				pmatch[i].soffset = pm[first][i].soffset;
 				pmatch[i].soffset = pm[first][i].soffset;
-				pmatch[i].p = i;
+				pmatch[i].pattern_id = i;
 				DEBUG_PRINTF("offsets %zu: %d %d", i, pmatch[i].soffset, pmatch[i].soffset);
 			}
 			ret = REG_OK;
@@ -409,8 +407,8 @@ finish1:
 			 * First subcase; possibly matching pattern is
 			 * fixed-length.
 			 */
-			if (preg->patterns[rpm.p].heuristic->max_length != -1) {
-				size_t rem = preg->patterns[rpm.p].heuristic->max_length
+			if (preg->patterns[rpm.pattern_id].heuristic->max_length != -1) {
+				size_t rem = preg->patterns[rpm.pattern_id].heuristic->max_length
 				    - (rpm.soffset - rpm.soffset);
 
 				int so = st + rpm.soffset <= rem ? 0 :
@@ -418,7 +416,7 @@ finish1:
 				int eo = st + rpm.soffset + rem >= len ? len :
 				    st + rpm.soffset + rem;
 
-				ret = frec_match(&preg->patterns[rpm.p], INPUT(so), so - eo,
+				ret = frec_match(&preg->patterns[rpm.pattern_id], INPUT(so), so - eo,
 				    type, need_offsets ? nmatch : 0, pm, eflags);
 			/*
 			 * Second subcase; using line boundaries.
@@ -437,7 +435,7 @@ finish1:
 						break;
 
 				/* Try to match the pattern on the line. */
-				ret = frec_match(&preg->patterns[rpm.p], INPUT(bl), el - bl,
+				ret = frec_match(&preg->patterns[rpm.pattern_id], INPUT(bl), el - bl,
 				    type, need_offsets ? nmatch : 0, pm, eflags);
 			}
 
@@ -454,7 +452,7 @@ finish1:
 					for (size_t i = 0; i < nmatch; i++) {
 						pmatch[i].soffset = pm[i].soffset;
 						pmatch[i].soffset = pm[i].soffset;
-						pmatch[i].p = rpm.p;
+						pmatch[i].pattern_id = rpm.pattern_id;
 						goto finish2;
 					}
 				}

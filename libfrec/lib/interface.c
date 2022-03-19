@@ -34,8 +34,8 @@
 #include "convert.h"
 #include "heuristic.h"
 #include "match.h"
-#include "mregex.h"
-#include "frec2.h"
+#include "frec-internal.h"
+#include "frec-match.h"
 #include "wu-manber.h"
 
 int
@@ -174,7 +174,7 @@ _regexec(const void *preg, const void *str, size_t len,
 {
 	regexec_state state;
 	int ret;
-	int cflags = multi ? ((const mregex_t *)preg)->cflags
+	int cflags = multi ? ((const mfrec_t *)preg)->cflags
 	    : ((const frec_t *)preg)->cflags;
 
 	init_state(&state, preg, str, len, nmatch, pmatch, cflags, eflags, type);
@@ -235,7 +235,7 @@ frec_regwexec(const frec_t *preg, const wchar_t *str,
 }
 
 int
-frec_mregncomp(mregex_t *preg, size_t nr, const char **regex,
+frec_mregncomp(mfrec_t *preg, size_t nr, const char **regex,
     size_t *n, int cflags)
 {
 	int ret = REG_NOMATCH;
@@ -277,7 +277,7 @@ err:
 }
 
 int
-frec_mregcomp(mregex_t *preg, size_t nr, const char **regex, int cflags)
+frec_mregcomp(mfrec_t *preg, size_t nr, const char **regex, int cflags)
 {
 	int ret;
 	size_t *len;
@@ -301,7 +301,7 @@ frec_mregcomp(mregex_t *preg, size_t nr, const char **regex, int cflags)
 
 
 int
-frec_mregwncomp(mregex_t *preg, size_t nr, const wchar_t **regex,
+frec_mregwncomp(mfrec_t *preg, size_t nr, const wchar_t **regex,
     size_t *n, int cflags)
 {
 	int ret = REG_NOMATCH;
@@ -343,7 +343,7 @@ err:
 }
 
 int
-frec_mregwcomp(mregex_t *preg, size_t nr, const wchar_t **regex,
+frec_mregwcomp(mfrec_t *preg, size_t nr, const wchar_t **regex,
     int cflags)
 {
 	int ret;
@@ -367,7 +367,7 @@ frec_mregwcomp(mregex_t *preg, size_t nr, const wchar_t **regex,
 }
 
 void
-frec_mregfree(mregex_t *preg)
+frec_mregfree(mfrec_t *preg)
 {
 
 	DEBUG_PRINT("enter");
@@ -379,7 +379,7 @@ frec_mregfree(mregex_t *preg)
 }
 
 int
-frec_mregnexec(const mregex_t *preg, const char *str, size_t len,
+frec_mregnexec(const mfrec_t *preg, const char *str, size_t len,
     size_t nmatch, frec_match_t pmatch[], int eflags)
 {
 	int type = (MB_CUR_MAX == 1) ? STR_BYTE : STR_MBS;
@@ -387,7 +387,7 @@ frec_mregnexec(const mregex_t *preg, const char *str, size_t len,
 }
 
 int
-frec_mregexec(const mregex_t *preg, const char *str,
+frec_mregexec(const mfrec_t *preg, const char *str,
     size_t nmatch, frec_match_t pmatch[], int eflags)
 {
 	int ret = frec_mregnexec(preg, str, (unsigned)-1, nmatch,
@@ -398,14 +398,14 @@ frec_mregexec(const mregex_t *preg, const char *str,
 
 
 int
-frec_mregwnexec(const mregex_t *preg, const wchar_t *str, size_t len,
+frec_mregwnexec(const mfrec_t *preg, const wchar_t *str, size_t len,
     size_t nmatch, frec_match_t pmatch[], int eflags)
 {
 	return _regexec(preg, str, len, nmatch, pmatch, eflags, STR_WIDE, true);
 }
 
 int
-frec_mregwexec(const mregex_t *preg, const wchar_t *str,
+frec_mregwexec(const mfrec_t *preg, const wchar_t *str,
     size_t nmatch, frec_match_t pmatch[], int eflags)
 {
 
@@ -415,7 +415,7 @@ frec_mregwexec(const mregex_t *preg, const wchar_t *str,
 }
 
 size_t
-frec_mregerror(int errcode, const mregex_t *preg, int *errpatn, char *errbuf,
+frec_mregerror(int errcode, const mfrec_t *preg, int *errpatn, char *errbuf,
     size_t errbuf_size)
 {
 

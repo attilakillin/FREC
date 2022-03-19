@@ -31,6 +31,7 @@
 #include <wctype.h>
 
 #include "boyer-moore.h"
+#include "config.h"
 #include "convert.h"
 #include "regex-parser.h"
 

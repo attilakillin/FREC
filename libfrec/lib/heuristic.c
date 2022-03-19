@@ -1,4 +1,5 @@
 
+#include <tre/regex.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>

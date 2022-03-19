@@ -29,8 +29,7 @@
 
 #include "config.h"
 #include "hashtable.h"
-#include "mregex.h"
-#include "frec.h"
+#include "frec-internal.h"
 #include "wu-manber.h"
 
 #define WM_B 2
@@ -330,7 +329,7 @@ frec_wmexec(const wmsearch_t *wm, const void *str, size_t len,
 									if (!(wm->cflags & REG_NOSUB) && (nmatch > 0)) {
 										pmatch->soffset = pos - SIZES[idx];
 										pmatch->eoffset = pos;
-										pmatch->p = idx;
+										pmatch->pattern_id = idx;
 									}
 									ret = REG_OK;
 									goto finish;

@@ -24,6 +24,7 @@
  * SUCH DAMAGE.
  */
 
+#include <tre/regex.h>
 #include <check.h>
 #include <stdlib.h>
 #include <wchar.h>

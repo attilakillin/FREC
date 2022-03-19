@@ -5,7 +5,6 @@
 #include <stdbool.h>
 #include <wchar.h>
 
-#include "config.h"
 #include "frec-match.h"
 #include "hashtable.h"
 
@@ -53,16 +52,10 @@ typedef struct bm_preproc_t {
 bm_preproc_t *bm_create_preproc();
 void bm_free_preproc(bm_preproc_t *prep);
 
-int bm_preprocess_literal(
-	bm_preproc_t *result, const wchar_t *pattern, size_t len, int cflags);
-int bm_preprocess_full(
-	bm_preproc_t *result, const wchar_t *pattern, size_t len, int cflags);
+int bm_preprocess_literal(bm_preproc_t *result, const wchar_t *pattern, size_t len, int cflags);
+int bm_preprocess_full(bm_preproc_t *result, const wchar_t *pattern, size_t len, int cflags);
 
-int bm_execute_stnd(
-    frec_match_t result[], size_t nmatch, bm_preproc_t *prep, 
-	const char *text, size_t len, int eflags);
-int bm_execute_wide(
-    frec_match_t result[], size_t nmatch, bm_preproc_t *prep, 
-	const wchar_t *text, size_t len, int eflags);
+int bm_execute_stnd(frec_match_t result[], size_t nmatch, bm_preproc_t *prep, const char *text, size_t len, int eflags);
+int bm_execute_wide(frec_match_t result[], size_t nmatch, bm_preproc_t *prep, const wchar_t *text, size_t len, int eflags);
 
 #endif
