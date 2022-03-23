@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <wchar.h>
 
-#include "frec-match.h"
+#include <frec-match.h>
 #include "hashtable.h"
 #include "type-unification.h"
 

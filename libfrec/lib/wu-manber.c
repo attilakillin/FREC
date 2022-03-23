@@ -27,7 +27,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "config.h"
 #include "hashtable.h"
 #include "frec-internal.h"
 #include "wu-manber.h"

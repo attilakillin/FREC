@@ -1,5 +1,5 @@
-#ifndef CONFIG_H
-#define CONFIG_H 1
+#ifndef FREC_CONFIG_H
+#define FREC_CONFIG_H 1
 
 #include <tre/regex.h>
 

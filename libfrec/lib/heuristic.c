@@ -2,8 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
-
-#include "config.h"
+#include <frec-config.h>
 
 #include "heuristic.h"
 #include "regex-parser.h"

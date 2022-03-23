@@ -1,5 +1,5 @@
 #ifndef FREC_MATCH_H
-#define FREC_MATCH_H
+#define FREC_MATCH_H 1
 
 #include <stdlib.h>
 

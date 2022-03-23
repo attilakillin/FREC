@@ -27,8 +27,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <wctype.h>
-
-#include "config.h"
+#include <frec-config.h>
 
 #include "boyer-moore.h"
 

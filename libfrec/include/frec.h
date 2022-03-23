@@ -3,10 +3,13 @@
 
 #include <wchar.h>
 
+#include "frec-config.h"
+#include "frec-match.h"
+#include "frec-types.h"
+
 /* Early declaration of the structs used internally for state management. */
-struct frec_t;
-struct mfrec_t;
-struct frec_match_t;
+typedef struct frec_t frec_t;
+typedef struct mfrec_t mfrec_t;
 
 /* Single pattern compilation functions. */
 int frec_regcomp(struct frec_t *preg, const char *pattern, int cflags);

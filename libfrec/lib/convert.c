@@ -28,8 +28,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
+#include <frec-config.h>
 
-#include "config.h"
 #include "convert.h"
 
 int

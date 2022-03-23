@@ -1,5 +1,6 @@
 
-#include "config.h"
+#include <frec-config.h>
+
 #include "match.h"
 #include "type-unification.h"
 

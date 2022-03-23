@@ -29,8 +29,6 @@
 #include <string.h>
 #include <wchar.h>
 
-#include "config.h"
-
 #include "boyer-moore.h"
 #include "match.h"
 #include "frec-internal.h"

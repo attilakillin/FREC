@@ -30,12 +30,10 @@
 #include <wchar.h>
 
 #include "compile.h"
-#include "config.h"
 #include "convert.h"
 #include "heuristic.h"
 #include "match.h"
 #include "frec-internal.h"
-#include "frec-match.h"
 #include "wu-manber.h"
 
 int

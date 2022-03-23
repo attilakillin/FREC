@@ -30,7 +30,6 @@
 #include <wchar.h>
 
 #include "boyer-moore.h"
-#include "config.h"
 #include "frec-internal.h"
 #include "wu-manber.h"
 
