@@ -30,7 +30,7 @@ libfrec/lib/libfrec.a
 # Ignore all test files and reinclude the makefile and the source files
 libfrec/tests/**
 !libfrec/tests/**.c
-!libfrec/tests/**.Makefile.am
+!libfrec/tests/**Makefile.am
 
 # Ignore IDE-specific folders and files
 .vscode/
