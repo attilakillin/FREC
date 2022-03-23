@@ -1,488 +1,211 @@
-/*-
- * Copyright (C) 2012, 2015, 2017 Gabor Kovesdan <gabor@FreeBSD.org>
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- *
- * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
- * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
- * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
- * SUCH DAMAGE.
- */
 
-#include <sys/types.h>
-#include <stdlib.h>
-#include <string.h>
-#include <wchar.h>
-
-#include "boyer-moore.h"
 #include "config.h"
 #include "match.h"
-#include "frec-internal.h"
-#include "wu-manber.h"
+#include "type-unification.h"
 
-typedef struct matcher_state {
-	regex_t *preg;
-	heur_t *heur;
-	const void *str;
-	size_t len;
-	int type;
-	size_t nmatch;
-	frec_match_t *pmatch;
-	int eflags;
+/* Utility functions. */
+static int max(long a, long b) { return (a > b) ? a : b; }
+static int min(long a, long b) { return (a < b) ? a : b; }
 
-	const char *data_byte;
-	const char *data_wide;
-	size_t start;
-	size_t rem;
-	int ret;
-} matcher_state;
+/*
+ * Use the original library-supplied matcher on the given text. 
+ */
+static int
+match_original(
+    frec_match_t pmatch[], size_t nmatch,
+    const regex_t *preg, const str_t *text, int eflags
+) {
+    /* Allocate temporary storage for the matches. */
+    regmatch_t *matches = malloc(sizeof(regmatch_t) * nmatch);
+    if (matches == NULL) {
+        return (REG_ESPACE);
+    }
 
-inline static void init_state(matcher_state *state, regex_t *preg,
-    heur_t *heur, const void *str, size_t len, int type, size_t nmatch,
-    frec_match_t pmatch[], int eflags) {
+    /* Call the correct library function. */
+    int ret = (text->is_wide)
+        ? _dist_regnexec(preg, text->stnd, text->len, nmatch, matches, eflags)
+        : _dist_regwnexec(preg, text->wide, text->len, nmatch, matches, eflags);
 
-	state->preg = preg;
-	state->heur = heur;
-	state->str = str;
-	state->len = len;
-	state->type = type;
-	state->nmatch = nmatch;
-	state->pmatch = pmatch;
-	state->eflags = eflags;
+    /* Copy results into own frec_match_t array. */
+    if (ret == REG_OK) {
+        for (size_t i = 0; i < nmatch; i++) {
+            pmatch[i].soffset = matches[i].rm_so;
+            pmatch[i].eoffset = matches[i].rm_eo;
+        }
+    }
 
-	state->data_byte = str;
-	state->data_wide = str;
-	state->start = 0;
-	state->rem = 0;
-	state->ret = 0;
+    free(matches);
+    return ret;
 }
 
-inline static void fix_offsets(matcher_state *state, size_t off) {
+/*
+ * Use compiled heuristics to find matches.
+ */
+static int
+match_heuristic(
+    frec_match_t pmatch[], size_t nmatch, const heur_t *heur,
+    const regex_t *orig, const str_t *in_text, int eflags
+) {
+    int ret;
+    str_t text;
+    string_copy(&text, in_text);
 
-	for (size_t i = 0; i < state->nmatch; i++) {
-		state->pmatch[i].soffset += off;
-		state->pmatch[i].soffset += off;
-	}
-}
+    if (heur->heur_type == HEUR_LONGEST) {
+        /* This heuristic type means that we either have a maximum possible
+         * match size, or if we don't, no line feed can occur in a match. */
 
-inline static void seek_to(matcher_state *state, size_t off) {
+        /* Allocate space for at least one candidate match. */
+        size_t ncand = max(1, nmatch);
+        frec_match_t *cands = malloc(sizeof(frec_match_t) * ncand);
+        if (cands == NULL) {
+            return (REG_ESPACE);
+        }
 
-	state->str = (state->type == STR_WIDE)
-	    ? (const void *)&state->data_wide[off]
-	    : (const void *)&state->data_byte[off];
-}
+        size_t next_offset = 0; /* Offset from the current start of text. */
+        size_t glob_offset = 0; /* Global offset from the start of in_text. */
+        size_t match_idx = 0;   /* Current write index of pmatch. */
 
-inline static size_t search_lf_backward(matcher_state *state, size_t off) {
+        /* While we have text to read, offset the text with next_offset. */
+        while (text.len > 0) {
+            string_offset_by(&text, next_offset);
+            glob_offset += next_offset;
 
-	for (size_t so = state->start + off; ; so--)
-		if ((state->type == STR_WIDE) ? (state->data_wide[so] ==
-		    L'\n') : (state->data_byte[so] == '\n') || (so == 0))
-			return so;
+            /* Find candidate matches (at least one). */
+            ret = bm_execute(cands, ncand, heur->literal_prep, &text, eflags);
 
-}
+            /* If no candidates were found in the text, break out. */
+            if (ret != REG_OK) {
+                break;
+            }
 
-inline static size_t search_lf_forward(matcher_state *state, size_t off) {
-	size_t eo;
+            size_t count = count_matches(cands, ncand);
 
-	for (eo = state->start + off; state->start + off < state->len; eo++)
-		if ((state->type == STR_WIDE) ? (state->data_wide[eo] ==
-		    L'\n') : (state->data_byte[eo] == '\n'))
-			break;
-	return eo;
-}
+            /* The next offset value will be the end of the last candidate. */
+            next_offset = cands[count - 1].eoffset;
 
-inline static int call_regexec(const regex_t *preg, const void *str, size_t len,
-    int type, size_t nmatch, frec_match_t pmatch[], int eflags) {
-	regmatch_t *pm;
-	int ret;
+            /* For each candidate match: */
+            for (size_t i = 0; i < count; i++) {
+                size_t start = cands[i].soffset;
+                size_t end = cands[i].eoffset;
 
-	pm = malloc(sizeof(regmatch_t) * nmatch);
-	if (pm == NULL)
-		return (REG_ESPACE);
+                if (heur->max_length != -1) {
+                    /* If we know the max length of a match, set start
+                     * and end to have exactly that much wiggle room. */
 
-	for (size_t i = 0; i < nmatch; i++) {
-		pm[i].rm_so = pmatch[i].soffset;
-		pm[i].rm_eo = pmatch[i].eoffset;
-	}
+                    long delta = heur->max_length - (end - start);
 
-	ret = ((type == STR_WIDE) ?
-	    (_dist_regwnexec(preg, str, len, nmatch, pm, eflags)) :
-	    (_dist_regnexec(preg, str, len, nmatch, pm, eflags)));
+                    start = max(0, start - delta);
+                    end = min(text.len, end + delta);
+                } else {
+                    /* If we don't know its max length, we know that a
+                     * match never overlaps multiple lines. As such, we
+                     * set start and end to the nearest line breaks. */
 
-	if (ret == REG_OK)
-		for (size_t i = 0; i < nmatch; i++) {
-			pmatch[i].soffset = pm[i].rm_so;
-			pmatch[i].eoffset = pm[i].rm_eo;
-		}
-	free(pm);
+                    start = find_lf_backward(&text, start);
+                    end = find_lf_forward(&text, end);
+                }
 
-	return ret;
-}
+                /* If we already found matches, we need to set start and end
+                 * to at least the end of the previous match (otherwise, two
+                 * matches on the same line may have the same start and end
+                 * values). */
+                if (match_idx > 0) {
+                    size_t prev_end = pmatch[match_idx - 1].eoffset;
 
-int
-frec_match_heur(regex_t *preg, heur_t *heur, const void *str,
-    size_t len, int type, size_t nmatch, frec_match_t pmatch[], int eflags)
-{
-	int ret;
-	matcher_state state;
+                    start = max(start, prev_end - glob_offset);
+                    end = max(end, start);
+                }
 
-	init_state(&state, preg, heur, str, len, type, nmatch, pmatch, eflags);
+                /* Create a text excerpt from this section, and call the
+                 * library supplied matcher for at most one match. */
+                str_t section;
+                string_excerpt(&section, &text, start, end);
 
-	/*
-	 * REG_NEWLINE: looking for the longest fragment and then
-	 * isolate the line and run the automaton.
-	 */
-	if (heur->heur_type == HEUR_LONGEST) {
-		DEBUG_PRINT("using HEUR_LONGEST strategy");
-		while (state.start < state.len) {
-			size_t eo, so;
+                ret = match_original(pmatch + match_idx, min(nmatch, 1),
+                    orig, &section, eflags);
+                
+                /* If no match was found, continue with the next candidate. */
+                if (ret != REG_OK) {
+                    continue;
+                }
 
-			seek_to(&state, state.start);
+                /* If nmatch is not 0, fix the offsets of the new match. */
+                if (nmatch != 0) {
+                    pmatch[match_idx].soffset += glob_offset;
+                    pmatch[match_idx].eoffset += glob_offset;
+                }
 
-			/* Match for heuristic */
-			ret = (type == STR_WIDE)
-				// TODO pmatch is wrong type
-				? bm_execute_wide(pmatch, nmatch,
-					heur->literal_prep, str, len - state.start, eflags)
-				: bm_execute_stnd(pmatch, nmatch,
-					heur->literal_prep, str, len - state.start, eflags);
-			if (ret != REG_OK)
-				return ret;
+                /* If we found enough matches, return. */
+                match_idx++;
+                if (match_idx >= nmatch) {
+                    free(cands);
+                    return REG_OK;
+                }
 
-			/*
-			 * If we do not know the length of the possibly matching part,
-			 * look for newlines.
-			 */
-			if (heur->max_length == -1) {
-				so = search_lf_backward(&state, pmatch[0].soffset);
-				eo = search_lf_forward(&state, pmatch[0].soffset);
-			}
+                /* Continue with the next candidate. */
+            }
 
-			/*
-			 * If we know the possible match length, just check the narrowest
-			 * context that we can, without looking for explicit newlines.
-			 */
-			else {
-				state.rem = heur->max_length - (pmatch[0].soffset -
-				    pmatch[0].soffset);
+            /* After we looked through every candidate:
+             * If we are here, the at most nmatch candidates we found were not
+             * all proper matches. */
+        }
+        
+        /* If we are here, we reached the end of the text, and didn't find
+         * nmatch different matches. If we found none, return NOMATCH, else
+         * mark the boundary match, and return OK. */
 
-				so = state.start + pmatch[0].soffset <= state.rem ? 0 :
-				    state.start + pmatch[0].soffset - state.rem;
-				eo = state.start + pmatch[0].soffset + state.rem >= state.len ? state.len :
-				    state.start + pmatch[0].soffset + state.rem;
-			}
+        free(cands);
 
-			seek_to(&state, so);
-			ret = call_regexec(state.preg, state.str, eo - so, state.type, state.nmatch,
-			    state.pmatch, state.eflags);
-			if (ret == REG_NOMATCH) {
-				state.start = eo;
-				continue;
-			}
-			fix_offsets(&state, so);
-			return ret;
-		}
-	        return (REG_NOMATCH);
-	}
+        if (match_idx == 0) {
+            return (REG_NOMATCH);
+        } else {
+            pmatch[match_idx].soffset = -1;
+            pmatch[match_idx].eoffset = -1;
+            return (REG_OK);
+        }
+    } else {
+        /* This heuristic type means that we don't know the maximum match size,
+         * nor can we separate the input text by line feeds. As such, we search
+         * for the first possible candidate, and call the original matcher from
+         * the start of this candidate to the end of the original text. */
 
-	/*
-	 * General case when REG_NEWLINE is not set.  Look for prefix,
-	 * intermediate and suffix heuristics is available, to determine
-	 * the context where the automaton will be invoked.  The start
-	 * of the context is st and the relative end offset from st is
-	 * stored in n.
-	 */
-	else {
-		while (state.start < state.len) {
-			seek_to(&state, state.start);
+        frec_match_t first;
+        ret = bm_execute(&first, 1, heur->literal_prep, &text, eflags);
 
-			/* Find beginning */
-			DEBUG_PRINT("matching for prefix heuristics");
-			ret = (type == STR_WIDE)
-				// TODO pmatch is wrong type
-				? bm_execute_wide(state.pmatch, state.nmatch,
-					state.heur->literal_prep, state.str, state.len - state.start, state.eflags)
-				: bm_execute_stnd(state.pmatch, state.nmatch,
-					state.heur->literal_prep, state.str, state.len - state.start, state.eflags);
-			if (ret != REG_OK)
-				return (ret);
+        /* If not even a candidate was found, we'll return early. */
+        if (ret != REG_OK) {
+            return ret;
+        }
 
-			state.start += state.pmatch[0].soffset;
-			size_t new_len = state.len - state.start;
+        /* Run the original matcher on this subtext. */
+        string_offset_by(&text, first.soffset);
+        ret = match_original(pmatch, nmatch, orig, &text, eflags);
 
-			if (new_len > state.len - state.start)
-				return (REG_NOMATCH);
-
-			seek_to(&state, state.start);
-			ret = call_regexec(state.preg, state.str, new_len,
-			    state.type, state.nmatch, state.pmatch,
-			    state.eflags);
-
-			if (ret == REG_OK)
-				fix_offsets(&state, state.start);
-			return ret;
-		}
-		return (REG_NOMATCH);
-	}
+        /* Fix offsets that we messed up above, and return. */
+        if (nmatch > 0 && ret == REG_OK) {
+            for (size_t i = 0; i < nmatch && pmatch[i].soffset != -1; i++) {
+                pmatch[i].soffset += first.soffset;
+                pmatch[i].eoffset += first.soffset;
+            }
+        }
+        return ret;
+    }
 }
 
 int
-frec_match(const frec_t *preg, const void *str, size_t len,
-    int type, size_t nmatch, frec_match_t pmatch[], int eflags)
-{
-	bm_preproc_t *shortcut = preg->boyer_moore;
-	heur_t *heur = preg->heuristic;
-	int ret = REG_NOMATCH;
+frec_match(
+    frec_match_t pmatch[], size_t nmatch,
+    const frec_t *preg, const str_t *text, int eflags
+) {
+    const regex_t *orig = &preg->original;
+    bm_preproc_t *bm = preg->boyer_moore;
+    heur_t *heur = preg->heuristic;
 
-	if (shortcut != NULL) {
-		DEBUG_PRINT("matching with literal matcher");
-		return (type == STR_WIDE)
-			// TODO Incompatible pointer types
-			? bm_execute_wide(pmatch, nmatch, shortcut, str, len, eflags)
-			: bm_execute_stnd(pmatch, nmatch, shortcut, str, len, eflags);
-	} else if (heur != NULL) {
-		DEBUG_PRINT("matching with heuristic matcher");
-		return (frec_match_heur(__DECONST(regex_t *, &preg->original),
-		    heur, str, len, type, nmatch, pmatch, eflags));
-	}
-
-	DEBUG_PRINT("matching with automaton matcher");
-	ret = call_regexec(&preg->original, str, len, type, nmatch, pmatch, eflags);
-	return (ret);
-}
-
-int
-frec_match_stnd(frec_match_t pmatch[], size_t nmatch,
-	const frec_t *prep, const char *text, size_t len, int eflags)
-{
-	if (prep->boyer_moore != NULL) {
-		return bm_execute_stnd(pmatch, nmatch, prep->boyer_moore, text, len, eflags);
-	} else if (prep->heuristic != NULL) {
-		// TODO
-	} else {
-		return call_regexec(&prep->original, text, len, STR_BYTE, nmatch, pmatch, eflags);
-	}
-}
-
-int
-frec_mmatch(const void *str, size_t len, int type, size_t nmatch,
-    frec_match_t pmatch[], int eflags, const mfrec_t *preg)
-{
-	const wchar_t *str_wide = str;
-	const char *str_byte = str;
-	int ret = REG_NOMATCH;
-	bool need_offsets;
-
-	need_offsets = !(preg->cflags & REG_NOSUB) && (nmatch > 0);
-
-#define INPUT(pos) ((type == STR_WIDE) ? (const void *)&str_wide[pos] : \
-    (const void *)&str_byte[pos])
-
-	/*
-	 * MHEUR_NONE: worst case; no way to speed up the match.
-	 * There is no trivial best solution either, so just try
-	 * matching for each of the patterns and return the earliest.
-	 */
-	if (preg->type == MHEUR_NONE) {
-		DEBUG_PRINT("matching without multi-pattern heuristic");
-
-		if (!need_offsets) {
-			/* Run matches for each pattern until a match is found */
-			for (size_t i = 0; i < preg->k; i++) {
-				ret = frec_match(&preg->patterns[i], str, len, type,
-					0, NULL, eflags);
-				if (ret == REG_OK)
-					return REG_OK;
-				else if (ret != REG_NOMATCH)
-					return ret;
-			}
-			return REG_NOMATCH;
-		} else {
-			frec_match_t **pm = NULL;
-			size_t i;
-			int first;
-			bool matched = false;
-
-			/* Alloc one frec_match_t for each pattern */
-			pm = malloc(preg->k * sizeof(frec_match_t *));
-			if (!pm)
-				return (REG_ESPACE);
-			for (i = 0; i < preg->k; i++) {
-				pm[i] = malloc(nmatch * sizeof(frec_match_t));
-				if (!pm[i])
-					goto finish1;
-			}
-
-			/* Run matches for each pattern and save first matching offsets. */
-			for (i = 0; i < preg->k; i++) {
-				ret = frec_match(&preg->patterns[i], str, len, type,
-					nmatch, pm[i], eflags);
-
-				/* Mark if there is no match for the pattern. */
-				if (ret == REG_OK)
-					matched = true;
-				else if (ret == REG_NOMATCH)
-					pm[i][0].soffset = -1;
-				else
-					goto finish1;
-			}
-
-			if (!matched) {
-				ret = REG_NOMATCH;
-				goto finish1;
-			} else {
-				/* If there are matches, find the first one. */
-				first = 0;
-				for (i = 1; i < preg->k; i++) {
-					if (pm[i][0].soffset == -1)
-						continue;
-					else if ((pm[i][0].soffset < pm[first][0].soffset) ||
-					    ((pm[i][0].soffset == pm[first][0].soffset) && (pm[i][0].soffset > pm[first][0].soffset)))
-						first = i;
-				}
-			}
-
-			/* Fill in the offsets before returning. */
-			for (i = 0; i < nmatch; i++) {
-				pmatch[i].soffset = pm[first][i].soffset;
-				pmatch[i].soffset = pm[first][i].soffset;
-				pmatch[i].pattern_id = i;
-				DEBUG_PRINTF("offsets %zu: %d %d", i, pmatch[i].soffset, pmatch[i].soffset);
-			}
-			ret = REG_OK;
-
-finish1:
-			if (pm) {
-				for (i = 0; i < preg->k; i++)
-					if (pm[i])
-						free(pm[i]);
-				free(pm);
-			}
-			return ret;
-		}
-	}
-
-	/*
-	 * MHEUR_LONGEST: only searching the longest fragment of each
-	 * pattern and then isolating the context and calling the
-	 * automaton.
-	 */
-	else if (preg->type == MHEUR_LONGEST) {
-		frec_match_t *pm = NULL;
-		frec_match_t rpm;
-		size_t st = 0, bl, el;
-
-		DEBUG_PRINT("matching to the longest fragments and isolating lines");
-
-		/* Alloc frec_match_t structures for results */
-		if (need_offsets) {
-			pm = malloc(nmatch * sizeof(frec_match_t *));
-			if (!pm)
-				return REG_ESPACE;
-		}
-
-		while (st < len) {
-			/* Look for a possible match. */
-			ret = frec_wmexec(preg->searchdata, INPUT(st), len, type,
-			    1, &rpm, eflags);
-			if (ret != REG_OK)
-				goto finish2;
-
-			/*
-			 * First subcase; possibly matching pattern is
-			 * fixed-length.
-			 */
-			if (preg->patterns[rpm.pattern_id].heuristic->max_length != -1) {
-				size_t rem = preg->patterns[rpm.pattern_id].heuristic->max_length
-				    - (rpm.soffset - rpm.soffset);
-
-				int so = st + rpm.soffset <= rem ? 0 :
-				    st + rpm.soffset - rem;
-				int eo = st + rpm.soffset + rem >= len ? len :
-				    st + rpm.soffset + rem;
-
-				ret = frec_match(&preg->patterns[rpm.pattern_id], INPUT(so), so - eo,
-				    type, need_offsets ? nmatch : 0, pm, eflags);
-			/*
-			 * Second subcase; using line boundaries.
-			 */
-			} else {
-				/* Look for the beginning of the line. */
-				for (bl = st; bl > 0; bl--)
-					if ((type == STR_WIDE) ? (str_wide[bl] == L'\n') :
-					    (str_byte[bl] == '\n'))
-						break;
-
-				/* Look for the end of the line. */
-				for (el = st; el < len; el++)
-					if ((type == STR_WIDE) ? (str_wide[el] == L'\n') :
-					    (str_byte[el] == '\n'))
-						break;
-
-				/* Try to match the pattern on the line. */
-				ret = frec_match(&preg->patterns[rpm.pattern_id], INPUT(bl), el - bl,
-				    type, need_offsets ? nmatch : 0, pm, eflags);
-			}
-
-			/* Need to start from here if matching failed. */
-			st += rpm.soffset + 1;
-
-			/* Evaluate result. t*/
-			if (ret == REG_NOMATCH)
-				continue;
-			else if (ret == REG_OK) {
-				if (!need_offsets)
-					return REG_OK;
-				else {
-					for (size_t i = 0; i < nmatch; i++) {
-						pmatch[i].soffset = pm[i].soffset;
-						pmatch[i].soffset = pm[i].soffset;
-						pmatch[i].pattern_id = rpm.pattern_id;
-						goto finish2;
-					}
-				}
-			} else
-				goto finish2;
-		}
-finish2:
-		if (!pm)
-			free(pm);
-		return ret;
-	}
-
-	/*
-	 * MHEUR_LITERAL: literal case; it is enough to search with Wu-Manber
-	 * and immediately return the match.
-	 */
-	else if (preg->type == MHEUR_LITERAL) {
-
-		DEBUG_PRINT("matching multiple literal patterns");
-
-		return frec_wmexec(preg->searchdata, str, len, type, nmatch,
-		    pmatch, eflags);
-	}
-
-	/*
-	 * MHEUR_SINGLE: single pattern; call single matcher.
-	 */
-	else if (preg->type == MHEUR_SINGLE)
-		return frec_match(&preg->patterns[0], str, len, type,
-		    nmatch, pmatch, eflags);
-
-	return ret;
+    if (bm != NULL) {
+        return bm_execute(pmatch, nmatch, bm, text, eflags);
+    } else if (heur != NULL) {
+        return match_heuristic(pmatch, nmatch, heur, orig, text, eflags);
+    } else {
+        return match_original(pmatch, nmatch, orig, text, eflags);
+    }
 }

@@ -7,6 +7,7 @@
 
 #include "frec-match.h"
 #include "hashtable.h"
+#include "type-unification.h"
 
 /* 
  * Contains data compiled during the Boyer-Moore preprocessing phase.
@@ -55,7 +56,6 @@ void bm_free_preproc(bm_preproc_t *prep);
 int bm_preprocess_literal(bm_preproc_t *result, const wchar_t *pattern, size_t len, int cflags);
 int bm_preprocess_full(bm_preproc_t *result, const wchar_t *pattern, size_t len, int cflags);
 
-int bm_execute_stnd(frec_match_t result[], size_t nmatch, bm_preproc_t *prep, const char *text, size_t len, int eflags);
-int bm_execute_wide(frec_match_t result[], size_t nmatch, bm_preproc_t *prep, const wchar_t *text, size_t len, int eflags);
+int bm_execute(frec_match_t result[], size_t nmatch, bm_preproc_t *prep, const str_t *text, int eflags);
 
 #endif

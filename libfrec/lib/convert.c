@@ -25,53 +25,15 @@
  */
 
 #include <sys/types.h>
-#include <tre/regex.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
 
+#include "config.h"
 #include "convert.h"
 
-/*
- * Converts a string in multibyte representation (mbs) with a length
- * of mbn to a string with wide character representation (wcs) and a
- * size of wcn.
- * Returns REG_OK if the conversion is successful, REG_BADPAT if the
- * given mbs string is malformed, and REG_ESPACE on memory errors.
- */
 int
-frec_convert_mbs_to_wcs(
-	const char *mbs, size_t mbn, wchar_t **wcs, size_t *wcn)
-{	
-	/* Check the validity of the multibyte string. */
-	size_t size = mbstowcs(NULL, mbs, 0);
-	if (size == (size_t) - 1) {
-		return (REG_BADPAT);
-	}
-
-	wchar_t *result = malloc(sizeof(wchar_t) * (size + 1));
-	if (result == NULL) {
-		return (REG_ESPACE);
-	}
-
-	mbstowcs(result, mbs, size);
-	result[size] = '\0';
-
-	*wcs = result;
-	*wcn = size;
-	return (REG_OK);
-}
-
-/*
- * Converts a string in wide character representation (wcs) with a
- * length of wcn to a string with multibyte representation (mbs)
- * and a size of mbn.
- * Returns REG_OK if the conversion is successful, REG_BADPAT if the
- * given wcs string is malformed, and REG_ESPACE on memory errors.
- */
-int
-frec_convert_wcs_to_mbs(
-	const wchar_t *wcs, size_t wcn, char **mbs, size_t *mbn)
+convert_wcs_to_mbs(const wchar_t *wcs, size_t wn, char **mbs, size_t *mn)
 {
 	/* Check the validity of the wide char string. */
 	size_t size = wcstombs(NULL, wcs, 0);
@@ -84,10 +46,34 @@ frec_convert_wcs_to_mbs(
 		return (REG_ESPACE);
 	}
 
+	/* Convert and assign to output variables. */
 	wcstombs(result, wcs, size);
 	result[size] = '\0';
 
 	*mbs = result;
-	*mbn = size;
+	*mn = size;
+	return (REG_OK);
+}
+
+int
+convert_mbs_to_wcs(const char *mbs, size_t mn, wchar_t **wcs, size_t *wn)
+{	
+	/* Check the validity of the multibyte string. */
+	size_t size = mbstowcs(NULL, mbs, 0);
+	if (size == (size_t) - 1) {
+		return (REG_BADPAT);
+	}
+
+	wchar_t *result = malloc(sizeof(wchar_t) * (size + 1));
+	if (result == NULL) {
+		return (REG_ESPACE);
+	}
+
+	/* Convert and assign to output variables. */
+	mbstowcs(result, mbs, size);
+	result[size] = '\0';
+
+	*wcs = result;
+	*wn = size;
 	return (REG_OK);
 }

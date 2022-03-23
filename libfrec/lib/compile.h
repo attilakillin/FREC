@@ -1,7 +1,6 @@
 #ifndef COMPILE_H
 #define COMPILE_H 1
 
-#include <sys/types.h>
 #include <wchar.h>
 
 #include "frec-internal.h"

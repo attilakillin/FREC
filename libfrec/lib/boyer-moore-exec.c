@@ -28,8 +28,9 @@
 #include <string.h>
 #include <wctype.h>
 
-#include "boyer-moore.h"
 #include "config.h"
+
+#include "boyer-moore.h"
 
 /* Utility functions. */
 static int max(int a, int b) { return (a > b) ? a : b; }
@@ -219,6 +220,13 @@ exec_turbo_bm_wide(
         srch_pos += shift;
     }
 
+    /* If we didn't fill up the required number of matches,
+     * mark this by setting the next result to -1, -1. */
+    if (res_cnt < nmatch) {
+        result[res_cnt].soffset = -1;
+        result[res_cnt].eoffset = -1;
+    }
+
     return (res_cnt == 0) ? (REG_NOMATCH) : (REG_OK);
 }
 
@@ -231,21 +239,20 @@ exec_turbo_bm_wide(
  * Execution flags can be supplied in the eflags field.
  */
 int
-bm_execute_stnd(
-    frec_match_t result[], size_t nmatch, bm_preproc_t *prep,
-    const char *_text, size_t _len, int eflags)
-{
+bm_execute(
+    frec_match_t result[], size_t nmatch,
+    bm_preproc_t *prep, const str_t *text, int eflags
+) {
     /* Set bool fields. */
-    bool store_matches = !prep->f_nosub && nmatch != 0;
+    bool store_matches = !prep->f_nosub && nmatch != 0 && result != NULL;
     bool no_bol_anchor = eflags & REG_NOTBOL;
     bool no_eol_anchor = eflags & REG_NOTEOL;
 
-    const char *text = _text;
-    size_t len = _len;
+    size_t len = text->len;
 
     /* If we don't know the length of the text, find out. */
     if (len == (size_t) - 1) {
-        len = strlen(text);
+        len = (text->is_wide) ? wcslen(text->wide) : strlen(text->stnd);
     }
 
     /* If the prep pattern matches everything, return early. */
@@ -268,64 +275,12 @@ bm_execute_stnd(
     }
 
     /* If the original pattern is longer than the text, return. */
-    if (prep->stnd.len > len) {
+    if ((text->is_wide) ? (prep->wide.len > len) : (prep->stnd.len > len)) {
         return (REG_NOMATCH);
     }
 
     /* Execute BM algorithm. */
-    return exec_turbo_bm_stnd(result, nmatch, prep, text, len, store_matches);
-}
-
-/*
- * Executes the Boyer-Moore algorithm on the given text (with the
- * specified length) and with the given prep preprocessing struct.
- * Stores at most nmatch results in the result array.
- * An nmatch of 0 means that the search is executed, but only a
- * simple REG_OK or REG_NOMATCH is returned.
- * Execution flags can be supplied in the eflags field.
- */
-int
-bm_execute_wide(
-    frec_match_t result[], size_t nmatch, bm_preproc_t *prep,
-    const wchar_t *_text, size_t _len, int eflags)
-{
-    /* Set bool fields. */
-    bool store_matches = !prep->f_nosub && nmatch != 0;
-    bool no_bol_anchor = eflags & REG_NOTBOL;
-    bool no_eol_anchor = eflags & REG_NOTEOL;
-
-    const wchar_t *text = _text;
-    size_t len = _len;
-
-    /* If we don't know the length of the text, find out. */
-    if (len == (size_t) - 1) {
-        len = wcslen(text);
-    }
-
-    /* If the prep pattern matches everything, return early. */
-    if (prep->f_matchall) {
-        if (store_matches) {
-            result[0].soffset = 0;
-            result[0].eoffset = len;
-        }
-        return (REG_OK);
-    }
-
-    /* If BOL and EOL don't match the start and end of the text, we won't
-     * accept any matches that are at the very beginning or the very end. */
-    if (prep->f_linebegin && no_bol_anchor) {
-        text++;
-        len--;
-    }
-    if (prep->f_lineend && no_eol_anchor) {
-        len--;
-    }
-
-    /* If the original pattern is longer than the text, return. */
-    if (prep->wide.len > len) {
-        return (REG_NOMATCH);
-    }
-
-    /* Execute BM algorithm. */
-    return exec_turbo_bm_wide(result, nmatch, prep, text, len, store_matches);
+    return (text->is_wide)
+        ? exec_turbo_bm_wide(result, nmatch, prep, text->wide, len, store_matches)
+        : exec_turbo_bm_stnd(result, nmatch, prep, text->stnd, len, store_matches);
 }

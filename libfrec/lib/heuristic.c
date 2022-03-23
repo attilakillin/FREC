@@ -1,8 +1,9 @@
 
-#include <tre/regex.h>
 #include <stdlib.h>
 #include <string.h>
 #include <wchar.h>
+
+#include "config.h"
 
 #include "heuristic.h"
 #include "regex-parser.h"

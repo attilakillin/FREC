@@ -1,5 +1,5 @@
 #ifndef LIBFREC_H
-#define LIBFREC_H
+#define LIBFREC_H 1
 
 #include <wchar.h>
 

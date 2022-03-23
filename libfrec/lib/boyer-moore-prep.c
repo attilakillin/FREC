@@ -30,8 +30,9 @@
 #include <string.h>
 #include <wctype.h>
 
-#include "boyer-moore.h"
 #include "config.h"
+
+#include "boyer-moore.h"
 #include "convert.h"
 #include "regex-parser.h"
 
@@ -207,8 +208,7 @@ fill_good_shifts_stnd(bm_preproc_ct *stnd, bool ignore_case)
 	}
 
 	/* Calculate good shifts into the newly created table. */
-	int res = calculate_good_shifts(
-		stnd->goods_shifts, pattern, 1, len);
+	int res = calculate_good_shifts(stnd->goods_shifts, pattern, 1, len);
 
 	/* If the case was ignored or an error occurred, the copy is freed. */
 	if (ignore_case || res != REG_OK) {
@@ -380,7 +380,7 @@ bm_preprocess_literal(
 	result->wide.len = len;
 
 	/* Convert and initialize standard pattern from the given wide pattern. */
-	int ret = frec_convert_wcs_to_mbs(
+	int ret = convert_wcs_to_mbs(
 		pattern, len, &(result->stnd.pattern), &(result->stnd.len));
 	if (ret != REG_OK) {
 		bm_free_preproc(result);

@@ -40,6 +40,8 @@ do {									\
 	goto failcomp;							\
 } while (0);
 
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+
 static int
 procwm(const void **pat_arr, size_t *siz_arr, size_t nr, size_t chsiz, void *sh, size_t *m, int type)
  {

@@ -30,6 +30,7 @@
 #include <tre/regex.h>
 
 #include "boyer-moore.h"
+#include "type-unification.h"
 
 /* 
  * Macro that can be used to test whether a literal Boyer-Moore preprocessing
@@ -89,8 +90,10 @@
 													\
 		frec_match_t match;							\
 		char *t = text;								\
-		ret = bm_execute_stnd(&match, 1, prep, t, strlen(t), 0);			\
+		str_t *_text = string_create_stnd(t, strlen(t));					\
+		ret = bm_execute(&match, 1, prep, _text, 0);			\
 		bm_free_preproc(prep);						\
+		string_free(_text);							\
 													\
 		ck_assert_int_eq(REG_OK, ret);				\
 		ck_assert_int_eq(soff, match.soffset);		\
@@ -116,8 +119,10 @@
 		ck_assert(ret == REG_OK);					\
 													\
 		char *t = text;								\
-		ret = bm_execute_stnd(NULL, 0, prep, t, strlen(t), 0);				\
+		str_t *_text = string_create_stnd(t, strlen(t));					\
+		ret = bm_execute(NULL, 0, prep, _text, 0);				\
 		bm_free_preproc(prep);						\
+		string_free(_text);							\
 													\
 		ck_assert_int_eq(expected_return, ret);		\
 	}												\

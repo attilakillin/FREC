@@ -39,60 +39,57 @@
 #include "wu-manber.h"
 
 int
-frec_regncomp(frec_t *prep, const char *regex, size_t len, int cflags)
+frec_regncomp(frec_t *preg, const char *regex, size_t len, int cflags)
 {
 	wchar_t *wregex;
 	size_t wlen;
 
-	int ret = frec_convert_mbs_to_wcs(regex, len, &wregex, &wlen);
+	int ret = convert_mbs_to_wcs(regex, len, &wregex, &wlen);
 	if (ret != REG_OK) {
 		return ret;
 	}
 
-	ret = frec_compile(prep, wregex, wlen, cflags);
+	ret = frec_compile(preg, wregex, wlen, cflags);
 
 	free(wregex);
 	return ret;
 }
 
 int
-frec_regcomp(frec_t *prep, const char *regex, int cflags)
+frec_regcomp(frec_t *preg, const char *regex, int cflags)
 {
 	size_t len;
-	if ((cflags & REG_PEND) && prep->re_endp >= regex) {
-		len = prep->re_endp - regex;
+	if ((cflags & REG_PEND) && preg->re_endp >= regex) {
+		len = preg->re_endp - regex;
 	} else {
 		len = (regex != NULL) ? strlen(regex) : 0;
 	}
 
-	return frec_regncomp(prep, regex, len, cflags);
+	return frec_regncomp(preg, regex, len, cflags);
 }
 
 int
-frec_regwncomp(frec_t *prep, const wchar_t *regex, size_t len, int cflags)
+frec_regwncomp(frec_t *preg, const wchar_t *regex, size_t len, int cflags)
 {
-	return frec_compile(prep, regex, len, cflags);
+	return frec_compile(preg, regex, len, cflags);
 }
 
 int
-frec_regwcomp(frec_t *prep, const wchar_t *regex, int cflags)
+frec_regwcomp(frec_t *preg, const wchar_t *regex, int cflags)
 {
 	size_t len;
-	if ((cflags & REG_PEND) && prep->re_wendp >= regex) {
-		len = prep->re_wendp - regex;
+	if ((cflags & REG_PEND) && preg->re_wendp >= regex) {
+		len = preg->re_wendp - regex;
 	} else {
 		len = (regex != NULL) ? wcslen(regex) : 0;
 	}
 
-	return frec_regwncomp(prep, regex, len, cflags);
+	return frec_regwncomp(preg, regex, len, cflags);
 }
 
 void
 frec_regfree(frec_t *preg)
 {
-
-	DEBUG_PRINT("enter");
-
 	if (preg->boyer_moore != NULL) {
 		bm_free_preproc(preg->boyer_moore);
 	}
@@ -182,13 +179,19 @@ _regexec(const void *preg, const void *str, size_t len,
 	if ((state.eflags & REG_STARTEND) && (state.pmatch[0].soffset > state.pmatch[0].soffset))
 		return (REG_NOMATCH);
 	if (multi)
-		ret = frec_mmatch(&((const wchar_t *)state.str)[state.offset],
+		ret = oldfrec_mmatch(&((const wchar_t *)state.str)[state.offset],
 		    state.slen, state.type, state.nmatch, state.pmatch,
 		    state.eflags, state.preg);
-	else
-		ret = frec_match(state.preg, &((const char *)state.str)[state.offset],
-		    state.slen, state.type, state.nmatch, state.pmatch,
-		    state.eflags);
+	else {
+		str_t *text = (type == STR_WIDE)
+			? string_create_wide(str, len)
+			: string_create_stnd(str, len);
+
+		string_offset_by(text, state.offset);
+		ret = frec_match(state.pmatch, state.nmatch, state.preg, text, eflags);
+
+		string_free(text);
+	}
 	if (ret == REG_OK)
 		calc_offsets_post(&state);
 	DEBUG_PRINTF("returning %d", ret);
@@ -234,6 +237,8 @@ frec_regwexec(const frec_t *preg, const wchar_t *str,
 	return ret;
 }
 
+
+
 int
 frec_mregncomp(mfrec_t *preg, size_t nr, const char **regex,
     size_t *n, int cflags)
@@ -256,7 +261,7 @@ frec_mregncomp(mfrec_t *preg, size_t nr, const char **regex,
 		goto err;
 
 	for (i = 0; i < nr; i++) {
-		ret = frec_convert_mbs_to_wcs(regex[i], n[i], &wregex[i], &wlen[i]);
+		ret = convert_mbs_to_wcs(regex[i], n[i], &wregex[i], &wlen[i]);
 		if (ret != REG_OK)
 			goto err;
 	}
@@ -322,7 +327,7 @@ frec_mregwncomp(mfrec_t *preg, size_t nr, const wchar_t **regex,
 		goto err;
 
 	for (i = 0; i < nr; i++) {
-		ret = frec_convert_wcs_to_mbs(regex[i], n[i], &sregex[i], &slen[i]);
+		ret = convert_wcs_to_mbs(regex[i], n[i], &sregex[i], &slen[i]);
 		if (ret != REG_OK)
 			goto err;
 	}

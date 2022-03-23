@@ -52,6 +52,7 @@ compile_boyer_moore(
     if (prep == NULL) {
         return (REG_ESPACE);
     }
+    
     /* Based on the literal flag, choose apppropriate preprocessing. */
     int ret = (cflags & REG_LITERAL)
         ? bm_preprocess_literal(prep, pattern, len, cflags)
