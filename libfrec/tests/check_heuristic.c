@@ -142,7 +142,7 @@ int main(void)
 	Suite *suite = create_heur_suite();
 	SRunner *runner = srunner_create(suite);
 
-	srunner_run_all(runner, CK_VERBOSE);
+	srunner_run_all(runner, CK_NORMAL);
 	int failed = srunner_ntests_failed(runner);
 	srunner_free(runner);
 
