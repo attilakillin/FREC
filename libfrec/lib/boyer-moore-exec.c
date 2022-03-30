@@ -138,6 +138,13 @@ exec_turbo_bm_stnd(
         }
         srch_pos += shift;
     }
+    
+    /* If we didn't fill up the required number of matches,
+     * mark this by setting the next result to -1, -1. */
+    if (res_cnt < nmatch) {
+        result[res_cnt].soffset = -1;
+        result[res_cnt].eoffset = -1;
+    }
 
     return (res_cnt == 0) ? (REG_NOMATCH) : (REG_OK);
 }
@@ -259,6 +266,11 @@ bm_execute(
         if (store_matches) {
             result[0].soffset = 0;
             result[0].eoffset = len;
+            /* If we expected more matches, signal the boundary here */
+            if (nmatch > 1) {
+                result[1].soffset = -1;
+                result[1].eoffset = -1;
+            }
         }
         return (REG_OK);
     }

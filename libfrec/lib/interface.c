@@ -129,10 +129,10 @@ inline static void calc_offsets_pre(regexec_state *state)
 {
 
 	if (state->type == STR_WIDE)
-		state->slen = (state->len == (unsigned)-1)
+		state->slen = (state->len == (size_t)-1)
 		    ? wcslen((const wchar_t *)state->str) : state->len;
 	else
-		state->slen = (state->len == (unsigned)-1)
+		state->slen = (state->len == (size_t)-1)
 		    ? strlen((const char *)state->str) : state->len;
 	state->offset = 0;
 
@@ -203,7 +203,7 @@ frec_regexec(const frec_t *preg, const char *str,
     size_t nmatch, frec_match_t pmatch[], int eflags)
 {
 
-	int ret = frec_regnexec(preg, str, (unsigned)-1, nmatch,
+	int ret = frec_regnexec(preg, str, (size_t)-1, nmatch,
 	    pmatch, eflags);
 
 	DEBUG_PRINTF("returning %d", ret);
@@ -222,7 +222,7 @@ int
 frec_regwexec(const frec_t *preg, const wchar_t *str,
     size_t nmatch, frec_match_t pmatch[], int eflags)
 {
-	int ret = frec_regwnexec(preg, str, (unsigned)-1, nmatch,
+	int ret = frec_regwnexec(preg, str, (size_t)-1, nmatch,
 	    pmatch, eflags);
 	DEBUG_PRINTF("returning %d", ret);
 	return ret;
@@ -386,7 +386,7 @@ int
 frec_mregexec(const mfrec_t *preg, const char *str,
     size_t nmatch, frec_match_t pmatch[], int eflags)
 {
-	int ret = frec_mregnexec(preg, str, (unsigned)-1, nmatch,
+	int ret = frec_mregnexec(preg, str, (size_t)-1, nmatch,
 	    pmatch, eflags);
 	DEBUG_PRINTF("returning %d", ret);
 	return ret;
@@ -405,7 +405,7 @@ frec_mregwexec(const mfrec_t *preg, const wchar_t *str,
     size_t nmatch, frec_match_t pmatch[], int eflags)
 {
 
-	int ret = frec_mregwnexec(preg, str, (unsigned)-1, nmatch, pmatch, eflags);
+	int ret = frec_mregwnexec(preg, str, (size_t)-1, nmatch, pmatch, eflags);
 	DEBUG_PRINTF("returning %d", ret);
 	return ret;
 }
