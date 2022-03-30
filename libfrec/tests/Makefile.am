@@ -2,7 +2,8 @@
 TESTS = check_boyer_moore check_heuristic check_interface_single
 
 # Only build these executables when 'make check' is called
-check_PROGRAMS = check_boyer_moore check_heuristic \
+check_PROGRAMS = check_boyer_moore \
+                 check_heuristic \
                  check_interface_single
 
 # Configure sources and dependencies for the test executables

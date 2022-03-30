@@ -1,434 +1,237 @@
-/*-
- * Copyright (C) 2012, 2018 Gabor Kovesdan <gabor@FreeBSD.org>
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- *
- * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
- * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
- * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
- * SUCH DAMAGE.
- */
 
 #include <check.h>
-#include <stdlib.h>
 #include <frec.h>
-#include <tre/regex.h>
+#include <stdlib.h>
 
 #include "boyer-moore.h"
 #include "type-unification.h"
 
-/* 
- * Macro that can be used to test whether a literal Boyer-Moore preprocessing
- * on the given pattern returns the expected value or not.
- * - name: the name of the test case.
- * - pattern: the wide string pattern to run the preprocessing on.
- * - flags: regex compilation flags that are passed on to preprocessing.
- * - expected_return: the expected return value of the preprocessing.
- */
-#define BM_TEST_PREP_LIT(name, pattern, flags, expected_return)				\
-	START_TEST(name)								\
-	{												\
-		bm_preproc_t* prep = bm_create_preproc();	\
-		wchar_t *patt = pattern;					\
-		int ret = bm_preprocess_literal(prep, patt, wcslen(patt), flags); 	\
-		bm_free_preproc(prep);						\
-		ck_assert_int_eq(expected_return, ret);		\
-	}												\
-	END_TEST
+static int
+run_preprocess_literal(const wchar_t *pattern, int flags)
+{
+    bm_preproc_t *preg = bm_create_preproc();
 
-/* 
- * Macro that can be used to test whether a full Boyer-Moore preprocessing
- * on the given pattern returns the expected value or not.
- * - name: the name of the test case.
- * - pattern: the wide string pattern to run the preprocessing on.
- * - flags: regex compilation flags that are passed on to preprocessing.
- * - expected_return: the expected return value of the preprocessing.
- */
-#define BM_TEST_PREP_FULL(name, pattern, flags, expected_return)		\
-	START_TEST(name)								\
-	{												\
-		bm_preproc_t* prep = bm_create_preproc();	\
-		wchar_t *patt = pattern;					\
-		int ret = bm_preprocess_full(prep, patt, wcslen(patt), flags);	\
-		bm_free_preproc(prep);						\
-		ck_assert_int_eq(expected_return, ret);		\
-	}												\
-	END_TEST
+    int ret = bm_preprocess_literal(preg, pattern, wcslen(pattern), flags);
 
-/* 
- * Macro that can be used to test whether a full Boyer-Moore execution
- * on the given text finds the match at the given position, or not.
- * - name: the name of the test case.
- * - pattern: the wide string pattern to test for.
- * - text: the text that is searched.
- * - cflags: regex compilation flags that are passed on to preprocessing.
- * - soff: the expected start offset of the match.
- * - eoff: the expected end offset of the match.
- */
-#define BM_TEST_EXEC_MATCH(name, pattern, text, cflags, soff, eoff)			\
-	START_TEST(name)								\
-	{												\
-		bm_preproc_t* prep = bm_create_preproc();	\
-		wchar_t *patt = pattern;					\
-		int ret = bm_preprocess_full(prep, patt, wcslen(patt), cflags);		\
-		ck_assert(ret == REG_OK);					\
-													\
-		frec_match_t match;							\
-		char *t = text;								\
-		str_t *_text = string_create_stnd(t, strlen(t));					\
-		ret = bm_execute(&match, 1, prep, _text, 0);			\
-		bm_free_preproc(prep);						\
-		string_free(_text);							\
-													\
-		ck_assert_int_eq(REG_OK, ret);				\
-		ck_assert_int_eq(soff, match.soffset);		\
-		ck_assert_int_eq(eoff, match.eoffset);		\
-	}												\
-	END_TEST
+    bm_free_preproc(preg);
+    return ret;
+}
 
-/* 
- * Macro that can be used to test whether a full Boyer-Moore execution
- * on the given text correctly checks whether the text contains the pattern.
- * - name: the name of the test case.
- * - pattern: the wide string pattern to test for.
- * - text: the text that is searched.
- * - cflags: regex compilation flags that are passed on to preprocessing.
- * - expected_return: The expected return value of the execution.
- */
-#define BM_TEST_EXEC_CHECK(name, pattern, text, cflags, expected_return)	\
-	START_TEST(name)								\
-	{												\
-		bm_preproc_t* prep = bm_create_preproc();	\
-		wchar_t *patt = pattern;					\
-		int ret = bm_preprocess_full(prep, patt, wcslen(patt), cflags);	\
-		ck_assert(ret == REG_OK);					\
-													\
-		char *t = text;								\
-		str_t *_text = string_create_stnd(t, strlen(t));					\
-		ret = bm_execute(NULL, 0, prep, _text, 0);				\
-		bm_free_preproc(prep);						\
-		string_free(_text);							\
-													\
-		ck_assert_int_eq(expected_return, ret);		\
-	}												\
-	END_TEST
+static int
+run_preprocess_full(const wchar_t *pattern, int flags)
+{
+    bm_preproc_t *preg = bm_create_preproc();
 
-/* Preprocessing tests. */
+    int ret = bm_preprocess_full(preg, pattern, wcslen(pattern), flags);
 
-BM_TEST_PREP_LIT(
-	test_bm_prep_literal__ok,
-	L"something", 0, REG_OK
+    bm_free_preproc(preg);
+    return ret;
+}
+
+static int
+run_execute(
+    frec_match_t *matches, size_t match_cnt,
+    const wchar_t *pattern, const char *text, int flags
 )
+{
+    bm_preproc_t *preg = bm_create_preproc();
+    str_t *string = string_create_stnd(text, strlen(text));
 
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__ok,
-	L"something", 0, REG_OK
-)
+    int ret = bm_preprocess_full(preg, pattern, wcslen(pattern), flags);
+    ck_assert_msg(ret == REG_OK,
+        "Execute failed because preprocessing failed: returned '%d' for '%ls'",
+        ret, pattern
+    );
 
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__fail_when_pattern_has_brackets_basic,
-	L"p[r]int", 0, REG_BADPAT
-)
+    ret = bm_execute(matches, match_cnt, preg, string, flags);
 
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__fail_when_pattern_has_brackets_ext,
-	L"p[r]int", REG_EXTENDED, REG_BADPAT
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__fail_when_pattern_has_asterisk_basic,
-	L"p*int", 0, REG_BADPAT
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__fail_when_pattern_has_asterisk_ext,
-	L"p*int", REG_EXTENDED, REG_BADPAT
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__fail_when_pattern_has_parens_basic,
-	L"print\\(ln\\)", 0, REG_BADPAT
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__fail_when_pattern_has_parens_ext,
-	L"print(ln)", REG_EXTENDED, REG_BADPAT
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__fail_when_pattern_has_dot_basic,
-	L"p.int", 0, REG_BADPAT
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__fail_when_pattern_has_dot_ext,
-	L"p.int", REG_EXTENDED, REG_BADPAT
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__fail_when_pattern_has_pipe_ext,
-	L"pr|int", REG_EXTENDED, REG_BADPAT
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__fail_when_pattern_has_plus_sign_ext,
-	L"pr+nt", REG_EXTENDED, REG_BADPAT
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__fail_when_pattern_has_question_mark_ext,
-	L"pri?nt", REG_EXTENDED, REG_BADPAT
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__fail_when_pattern_has_braces_basic,
-	L"print\\{1,2\\}", 0, REG_BADPAT
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__fail_when_pattern_has_braces_ext,
-	L"print{1,2}", REG_EXTENDED, REG_BADPAT
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__ok_when_pattern_has_escaped_brackets_basic,
-	L"p\\[r]int", 0, REG_OK
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__ok_when_pattern_has_escaped_brackets_ext,
-	L"p\\[r]int", REG_EXTENDED, REG_OK
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__ok_when_pattern_has_escaped_dot_basic,
-	L"p\\.int", 0, REG_OK
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__ok_when_pattern_has_escaped_dot_ext,
-	L"p\\.int", REG_EXTENDED, REG_OK
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__ok_when_pattern_has_escaped_asterisk_basic,
-	L"p\\*int", 0, REG_OK
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__ok_when_pattern_has_escaped_asterisk_ext,
-	L"p\\*int", REG_EXTENDED, REG_OK
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__ok_when_pattern_has_escaped_question_mark_ext,
-	L"pri\\?nt", REG_EXTENDED, REG_OK
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__ok_when_pattern_has_escaped_plus_sign_ext,
-	L"pr\\+nt", REG_EXTENDED, REG_OK
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__ok_when_pattern_has_escaped_pipe_ext,
-	L"pri\\|nt", REG_EXTENDED, REG_OK
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__ok_when_pattern_has_escaped_braces_ext,
-	L"print\\{1,2}", REG_EXTENDED, REG_OK
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__ok_when_pattern_has_escaped_braces_basic,
-	L"print{1,2}", 0, REG_OK
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__ok_when_pattern_has_escaped_parens_basic,
-	L"print(ln)", 0, REG_OK
-)
-
-BM_TEST_PREP_FULL(
-	test_bm_prep_full__ok_when_pattern_has_escaped_parens_ext,
-	L"print\\(ln)", REG_EXTENDED, REG_OK
-)
+    string_free(string);
+    bm_free_preproc(preg);
+    return ret;
+}
 
 
-/* Execution tests. */
+START_TEST(test_bm__sanity__literal_prep_ok)
+{
+    int ret = run_preprocess_literal(L"pattern", 0);
+    ck_assert_msg(ret == REG_OK, "Sanity literal preprocessing failed: returned '%d'", ret);
+}
+END_TEST
 
-BM_TEST_EXEC_CHECK(
-	test_bm_exec_stnd__ok_when_pattern_present,
-	L"Wednesday that",
-	"Astronomers announced on Wednesday that at last they had captured an image of the unobservable: a black hole",
-	0, REG_OK
-)
+START_TEST(test_bm__sanity__full_prep_ok)
+{
+    int ret = run_preprocess_full(L"pattern", 0);
+    ck_assert_msg(ret == REG_OK, "Sanity full preprocessing failed: returned '%d'", ret);
+}
+END_TEST
 
-BM_TEST_EXEC_CHECK(
-	test_bm_exec_stnd__ok_when_pattern_not_present,
-	L"This string is not present",
-	"Astronomers announced on Wednesday that at last they had captured an image of the unobservable: a black hole",
-	0, REG_NOMATCH
-)
+typedef struct prep_tuple {
+    const wchar_t *pattern;
+    int flags;
+} prep_tuple;
 
-BM_TEST_EXEC_MATCH(
-	test_bm_exec_stnd__match_when_pattern_is_same_as_text,
-	L"the same text", "the same text", 0, 0, 13
-)
+#define PREP_FAIL_LEN 13
+static prep_tuple prep_failures[PREP_FAIL_LEN] = {
+    /* Both BRE and ERE */
+    {L"p[r]int", 0},
+    {L"p[r]int", REG_EXTENDED},
+    {L"p*int", 0},
+    {L"p*int", REG_EXTENDED},
+    {L"p.int", 0},
+    {L"p.int", REG_EXTENDED},
+    /* BRE and ERE inverted */
+    {L"print\\(ln\\)", 0},
+    {L"print(ln)", REG_EXTENDED},
+    {L"print\\{1,2\\}", 0},
+    {L"print{1,2}", REG_EXTENDED},
+    /* Only in ERE */
+    {L"pr|int", REG_EXTENDED},
+    {L"pr+nt", REG_EXTENDED},
+    {L"pri?nt", REG_EXTENDED},
+};
 
-BM_TEST_EXEC_MATCH(
-	test_bm_exec_stnd__match_when_pattern_has_escaped_brackets_basic,
-	L"p\\[r]int", "Text that p[r]ints", 0, 10, 17
-)
+#define PREP_SUCC_LEN 13
+static prep_tuple prep_successes[PREP_SUCC_LEN] = {
+    /* Both BRE and ERE */
+    {L"p\\[r]int", 0},
+    {L"p\\[r]int", REG_EXTENDED},
+    {L"p\\*int", 0},
+    {L"p\\*int", REG_EXTENDED},
+    {L"p\\.int", 0},
+    {L"p\\.int", REG_EXTENDED},
+    /* BRE and ERE inverted */
+    {L"print(ln)", 0},
+    {L"print\\(ln)", REG_EXTENDED},
+    {L"print{1,2}", 0},
+    {L"print\\{1,2}", REG_EXTENDED},
+    /* Only in ERE */
+    {L"pri\\|nt", REG_EXTENDED},
+    {L"pr\\+nt", REG_EXTENDED},
+    {L"pri\\?nt", REG_EXTENDED}
+};
 
-BM_TEST_EXEC_MATCH(
-	test_bm_exec_stnd__match_when_pattern_has_escaped_brackets_ext,
-	L"p\\[r]int", "Text that p[r]ints", REG_EXTENDED, 10, 17
-)
+START_TEST(loop_test_bm__failures__full_prep_fails)
+{
+    prep_tuple current = prep_failures[_i];
+    int ret = run_preprocess_full(current.pattern, current.flags);
 
-BM_TEST_EXEC_MATCH(
-	test_bm_exec_stnd__match_when_pattern_has_escaped_dot_basic,
-	L"p\\.int", "Text that p.ints", 0, 10, 15
-)
+    ck_assert_msg(ret == REG_BADPAT,
+        "Full preprocessing did not fail on bad pattern: returned '%d' for '%ls' with flags '%d'",
+        ret, current.pattern, current.flags
+    );
+}
+END_TEST
 
-BM_TEST_EXEC_MATCH(
-	test_bm_exec_stnd__match_when_pattern_has_escaped_dot_ext,
-	L"p\\.int", "Text that p.ints", REG_EXTENDED, 10, 15
-)
+START_TEST(loop_test_bm__successes__full_prep_succeeds)
+{
+    prep_tuple current = prep_successes[_i];
+    int ret = run_preprocess_full(current.pattern, current.flags);
 
-BM_TEST_EXEC_MATCH(
-	test_bm_exec_stnd__match_when_pattern_has_escaped_asterisk_basic,
-	L"p\\*int", "Text that p*ints", 0, 10, 15
-)
-
-BM_TEST_EXEC_MATCH(
-	test_bm_exec_stnd__match_when_pattern_has_escaped_asterisk_ext,
-	L"p\\*int", "Text that p*ints", REG_EXTENDED, 10, 15
-)
-
-BM_TEST_EXEC_MATCH(
-	test_bm_exec_stnd__match_when_pattern_has_escaped_question_mark_ext,
-	L"p\\?int", "Text that p?ints", REG_EXTENDED, 10, 15
-)
-
-BM_TEST_EXEC_MATCH(
-	test_bm_exec_stnd__match_when_pattern_has_escaped_plus_sign_ext,
-	L"p\\+int", "Text that p+ints", REG_EXTENDED, 10, 15
-)
-
-BM_TEST_EXEC_MATCH(
-	test_bm_exec_stnd__match_when_pattern_has_escaped_pipe_ext,
-	L"p\\|int", "Text that p|ints", REG_EXTENDED, 10, 15
-)
-
-BM_TEST_EXEC_MATCH(
-	test_bm_exec_stnd__match_when_pattern_has_escaped_braces_basic,
-	L"print{1,2}", "Text that print{1,2}s", 0, 10, 20
-)
-
-BM_TEST_EXEC_MATCH(
-	test_bm_exec_stnd__match_when_pattern_has_escaped_braces_ext,
-	L"print\\{1,2}", "Text that print{1,2}s", REG_EXTENDED, 10, 20
-)
-
-BM_TEST_EXEC_MATCH(
-	test_bm_exec_stnd__match_when_pattern_has_escaped_parens_basic,
-	L"print(ln)", "Text that print(ln)s", 0, 10, 19
-)
-
-BM_TEST_EXEC_MATCH(
-	test_bm_exec_stnd__match_when_pattern_has_escaped_parens_ext,
-	L"print\\(ln)", "Text that print(ln)s", REG_EXTENDED, 10, 19
-)
+    ck_assert_msg(ret == REG_OK,
+        "Full preprocessing did not succeed on pattern: returned '%d' for '%ls' with flags '%d'",
+        ret, current.pattern, current.flags
+    );
+}
+END_TEST
 
 
-Suite *create_bm_suite()
+START_TEST(test_bm__sanity__execute_on_match_ok)
+{
+    int ret = run_execute(NULL, 0, L"something", "text that contains something here", 0);
+    ck_assert_msg(ret == REG_OK, "Sanity execution failed on match: returned '%d'", ret);
+}
+END_TEST
+
+START_TEST(test_bm__sanity__execute_on_nomatch_ok)
+{
+    int ret = run_execute(NULL, 0, L"something", "text that doesn't contain it", 0);
+    ck_assert_msg(ret == REG_NOMATCH, "Sanity execution failed on nomatch: returned '%d'", ret);
+}
+END_TEST
+
+typedef struct exec_tuple {
+    const wchar_t *pattern;
+    const char *text;
+    int flags;
+    frec_match_t expected;
+} exec_tuple;
+
+#define EXEC_SUCC_LEN 14
+static exec_tuple exec_successes[EXEC_SUCC_LEN] = {
+    /* Test on full match */
+    {L"exactly the same", "exactly the same", 0, {0, 16}},
+    /* Same in BRE and ERE */
+    {L"p\\[r]int", "text that p[r]ints", 0, {10, 17}},
+    {L"p\\[r]int", "text that p[r]ints", REG_EXTENDED, {10, 17}},
+    {L"p\\*int", "text that p*ints", 0, {10, 15}},
+    {L"p\\*int", "text that p*ints", REG_EXTENDED, {10, 15}},
+    {L"p\\.int", "text that p.ints", 0, {10, 15}},
+    {L"p\\.int", "text that p.ints", REG_EXTENDED, {10, 15}},
+    /* BRE and ERE inverted */
+    {L"print(ln)", "text that print(ln)s", 0, {10, 19}},
+    {L"print\\(ln)", "text that print(ln)s", REG_EXTENDED, {10, 19}},
+    {L"print{1,2}", "text that print{1,2}s", 0, {10, 20}},
+    {L"print\\{1,2}", "text that print{1,2}s", REG_EXTENDED, {10, 20}},
+    /* Only in ERE*/
+    {L"p\\|int", "text that p|ints", REG_EXTENDED, {10, 15}},
+    {L"p\\+int", "text that p+ints", REG_EXTENDED, {10, 15}},
+    {L"p\\?int", "text that p?ints", REG_EXTENDED, {10, 15}},
+};
+
+START_TEST(loop_test_bm__successes__single_exec_succeeds)
+{
+    exec_tuple current = exec_successes[_i];
+
+    frec_match_t match;
+    int ret = run_execute(&match, 1, current.pattern, current.text, current.flags);
+
+    ck_assert_msg(ret == REG_OK,
+        "Execution did not succed: returned '%d' for pattern '%ls' and text '%s' with flags '%d'",
+        ret, current.pattern, current.text, current.flags
+    );
+
+    ck_assert_msg(match.soffset == current.expected.soffset,
+        "Execution succeeded but match soffset differs: Got '%d' instead of '%d' for pattern '%ls' and text '%s' with flags '%d'",
+        match.soffset, current.expected.soffset, current.pattern, current.text, current.flags
+    );
+
+    ck_assert_msg(match.eoffset == current.expected.eoffset,
+        "Execution succeeded but match eoffset differs: Got '%d' instead of '%d' for pattern '%ls' and text '%s' with flags '%d'",
+        match.eoffset, current.expected.eoffset, current.pattern, current.text, current.flags
+    );
+}
+END_TEST
+
+static Suite *
+create_suite()
 {
 	Suite *suite = suite_create("Boyer-Moore");
 
 	TCase *tc_prep = tcase_create("Preprocessing");
 
-	/* Sanity checks. */
-	tcase_add_test(tc_prep, test_bm_prep_literal__ok);
-	tcase_add_test(tc_prep, test_bm_prep_full__ok);
+    tcase_add_test(tc_prep, test_bm__sanity__literal_prep_ok);
+    tcase_add_test(tc_prep, test_bm__sanity__full_prep_ok);
 
-	/* Full prep failing cases. */
-	tcase_add_test(tc_prep,	test_bm_prep_full__fail_when_pattern_has_brackets_basic);
-	tcase_add_test(tc_prep, test_bm_prep_full__fail_when_pattern_has_brackets_ext);
-	tcase_add_test(tc_prep, test_bm_prep_full__fail_when_pattern_has_asterisk_basic);
-	tcase_add_test(tc_prep, test_bm_prep_full__fail_when_pattern_has_asterisk_ext);
-	tcase_add_test(tc_prep, test_bm_prep_full__fail_when_pattern_has_parens_basic);
-	tcase_add_test(tc_prep, test_bm_prep_full__fail_when_pattern_has_parens_ext);
-	tcase_add_test(tc_prep, test_bm_prep_full__fail_when_pattern_has_dot_basic);
-	tcase_add_test(tc_prep, test_bm_prep_full__fail_when_pattern_has_dot_ext);
-	tcase_add_test(tc_prep, test_bm_prep_full__fail_when_pattern_has_pipe_ext);
-	tcase_add_test(tc_prep, test_bm_prep_full__fail_when_pattern_has_plus_sign_ext);
-	tcase_add_test(tc_prep, test_bm_prep_full__fail_when_pattern_has_question_mark_ext);
-	tcase_add_test(tc_prep, test_bm_prep_full__fail_when_pattern_has_braces_basic);
-	tcase_add_test(tc_prep, test_bm_prep_full__fail_when_pattern_has_braces_ext);
-
-	/* Full prep passing cases. */
-	tcase_add_test(tc_prep, test_bm_prep_full__ok_when_pattern_has_escaped_brackets_basic);
-	tcase_add_test(tc_prep, test_bm_prep_full__ok_when_pattern_has_escaped_brackets_ext);
-	tcase_add_test(tc_prep, test_bm_prep_full__ok_when_pattern_has_escaped_dot_basic);
-	tcase_add_test(tc_prep, test_bm_prep_full__ok_when_pattern_has_escaped_dot_ext);
-	tcase_add_test(tc_prep, test_bm_prep_full__ok_when_pattern_has_escaped_asterisk_basic);
-	tcase_add_test(tc_prep, test_bm_prep_full__ok_when_pattern_has_escaped_asterisk_ext);
-	tcase_add_test(tc_prep, test_bm_prep_full__ok_when_pattern_has_escaped_question_mark_ext);
-	tcase_add_test(tc_prep, test_bm_prep_full__ok_when_pattern_has_escaped_plus_sign_ext);
-	tcase_add_test(tc_prep, test_bm_prep_full__ok_when_pattern_has_escaped_pipe_ext);
-	tcase_add_test(tc_prep, test_bm_prep_full__ok_when_pattern_has_escaped_braces_ext);
-	tcase_add_test(tc_prep, test_bm_prep_full__ok_when_pattern_has_escaped_braces_basic);
-	tcase_add_test(tc_prep, test_bm_prep_full__ok_when_pattern_has_escaped_parens_basic);
-	tcase_add_test(tc_prep, test_bm_prep_full__ok_when_pattern_has_escaped_parens_ext);
+    tcase_add_loop_test(tc_prep, loop_test_bm__failures__full_prep_fails, 0, PREP_FAIL_LEN);
+    tcase_add_loop_test(tc_prep, loop_test_bm__successes__full_prep_succeeds, 0, PREP_SUCC_LEN);
 
 	TCase *tc_exec = tcase_create("Execution");
 
-	/* Sanity checks */
-	tcase_add_test(tc_exec, test_bm_exec_stnd__ok_when_pattern_present);
-	tcase_add_test(tc_exec, test_bm_exec_stnd__ok_when_pattern_not_present);
+    tcase_add_test(tc_exec, test_bm__sanity__execute_on_match_ok);
+    tcase_add_test(tc_exec, test_bm__sanity__execute_on_nomatch_ok);
 
-	/* Execution passing cases */
-	tcase_add_test(tc_exec, test_bm_exec_stnd__match_when_pattern_is_same_as_text);
-	tcase_add_test(tc_exec, test_bm_exec_stnd__match_when_pattern_has_escaped_brackets_basic);
-	tcase_add_test(tc_exec, test_bm_exec_stnd__match_when_pattern_has_escaped_brackets_ext);
-	tcase_add_test(tc_exec, test_bm_exec_stnd__match_when_pattern_has_escaped_dot_basic);
-	tcase_add_test(tc_exec, test_bm_exec_stnd__match_when_pattern_has_escaped_dot_ext);
-	tcase_add_test(tc_exec, test_bm_exec_stnd__match_when_pattern_has_escaped_asterisk_basic);
-	tcase_add_test(tc_exec, test_bm_exec_stnd__match_when_pattern_has_escaped_asterisk_ext);
-	tcase_add_test(tc_exec, test_bm_exec_stnd__match_when_pattern_has_escaped_question_mark_ext);
-	tcase_add_test(tc_exec, test_bm_exec_stnd__match_when_pattern_has_escaped_plus_sign_ext);
-	tcase_add_test(tc_exec, test_bm_exec_stnd__match_when_pattern_has_escaped_pipe_ext);
-	tcase_add_test(tc_exec, test_bm_exec_stnd__match_when_pattern_has_escaped_braces_basic);
-	tcase_add_test(tc_exec, test_bm_exec_stnd__match_when_pattern_has_escaped_braces_ext);
-	tcase_add_test(tc_exec, test_bm_exec_stnd__match_when_pattern_has_escaped_parens_basic);
-	tcase_add_test(tc_exec, test_bm_exec_stnd__match_when_pattern_has_escaped_parens_ext);
+	tcase_add_loop_test(tc_exec, loop_test_bm__successes__single_exec_succeeds, 0, EXEC_SUCC_LEN);
 	
-	suite_add_tcase(suite, tc_prep);
+    suite_add_tcase(suite, tc_prep);
 	suite_add_tcase(suite, tc_exec);
 
 	return suite;
 }
 
-int main(void)
+int
+main(void)
 {
-	Suite *suite = create_bm_suite();
+	Suite *suite = create_suite();
 	SRunner *runner = srunner_create(suite);
 
 	srunner_run_all(runner, CK_NORMAL);
