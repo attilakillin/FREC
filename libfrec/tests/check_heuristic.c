@@ -1,145 +1,199 @@
-/*-
- * Copyright (C) 2012, 2018 Gabor Kovesdan <gabor@FreeBSD.org>
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- *
- * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
- * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
- * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
- * SUCH DAMAGE.
- */
 
-#include <tre/regex.h>
 #include <check.h>
+#include <frec.h>
 #include <stdlib.h>
-#include <wchar.h>
 
 #include "heuristic.h"
 
-#define HEUR_TEST_RETURN(name, pattern, flags, expected_return)			\
-    START_TEST(name)								\
-	{												\
-		heur_t prep;                            	\
-		wchar_t *patt = pattern;					\
-		int prep_ret = frec_preprocess_heur(&prep, patt, wcslen(patt), flags); 	\
-		ck_assert_int_eq(expected_return, prep_ret);\
-		frec_free_heur(&prep);						\
-	}												\
-	END_TEST
+/* 
+ * Runs the heuristics preprocessing phase with full regex parsing.
+ * Returns the result of the preprocessing call.
+ */
+static int
+run_preprocess(const wchar_t *pattern, int flags)
+{
+    heur_t *prep = frec_create_heur();
 
-#define HEUR_TEST_SELECTED_PATTERN(name, in_pattern, flags, ex_pattern)	\
-    START_TEST(name)								\
-	{												\
-		heur_t prep;                            	\
-		wchar_t *patt = in_pattern;					\
-		int prep_ret = frec_preprocess_heur(&prep, patt, wcslen(patt), flags); 	\
-		ck_assert_int_eq(REG_OK, prep_ret);      	\
-        wchar_t *expected = ex_pattern;             \
-        int cmp = wcscmp(ex_pattern, prep.literal_prep->wide.pattern);          \
-        ck_assert_int_eq(0, cmp);                   \
-		frec_free_heur(&prep);						\
-	}												\
-	END_TEST
+    int ret = frec_preprocess_heur(prep, pattern, wcslen(pattern), flags);
 
-HEUR_TEST_RETURN(
-    test_heur_prep__literal_ok,
-	L"literal pattern", 0, REG_OK
-)
+    frec_free_heur(prep);
+    return ret;
+}
 
-HEUR_TEST_RETURN(
-    test_heur_prep__prefix_ok,
-	L"literal(pattern){1,2}", REG_EXTENDED, REG_OK
-)
+/* 
+ * Runs the heuristics preprocessing phase with full regex parsing.
+ * Returns the created heur_t struct. Asserts that compilation succeeded.
+ */
+static heur_t *
+run_and_return_prep(const wchar_t *pattern, int flags)
+{
+    heur_t *prep = frec_create_heur();
 
-HEUR_TEST_RETURN(
-    test_heur_prep__longest_ok,
-	L"(prefix)? with pattern", REG_EXTENDED, REG_OK
-)
+    int ret = frec_preprocess_heur(prep, pattern, wcslen(pattern), flags);
+    ck_assert_msg(ret == REG_OK,
+        "Preprocessing failed: returned '%d' for pattern '%ls' with flags '%d'",
+        ret, pattern, flags
+    );
 
-HEUR_TEST_SELECTED_PATTERN(
-    test_heur_prep__literal_has_correct_bm_pattern,
-    L"literal pattern", 0, L"literal pattern"
-)
+    return prep;
+}
 
 
-HEUR_TEST_SELECTED_PATTERN(
-    test_heur_prep__prefix_has_correct_bm_pattern__bracket_bre,
-    L"literal[opt]", 0, L"literal"
-)
+START_TEST(test_heur__sanity__literal_ok)
+{
+    int ret = run_preprocess(L"pattern", 0);
+    ck_assert_msg(ret == REG_OK, "Sanity literal preprocessing failed: returned '%d'", ret);
+}
+END_TEST
 
-HEUR_TEST_SELECTED_PATTERN(
-    test_heur_prep__prefix_has_correct_bm_pattern__bracket_ere,
-    L"literal[opt]", REG_EXTENDED, L"literal"
-)
+START_TEST(test_heur__sanity__prefix_ok)
+{
+    int ret = run_preprocess(L"pattern(other){1,2}", 0);
+    ck_assert_msg(ret == REG_OK, "Sanity prefix preprocessing failed: returned '%d'", ret);
+}
+END_TEST
 
-HEUR_TEST_SELECTED_PATTERN(
-    test_heur_prep__prefix_has_correct_bm_pattern__bracket_caret,
-    L"literal[^opt]", REG_EXTENDED, L"literal"
-)
+START_TEST(test_heur__sanity__longest_ok)
+{
+    int ret = run_preprocess(L"(other){1,2}pattern", 0);
+    ck_assert_msg(ret == REG_OK, "Sanity longest preprocessing failed: returned '%d'", ret);
+}
+END_TEST
 
 
-HEUR_TEST_SELECTED_PATTERN(
-    test_heur_prep__longest_has_correct_bm_pattern__bracket_bre,
-    L"[opt]literal", 0, L"literal"
-)
+typedef struct heur_tuple {
+    const wchar_t *pattern;
+    int flags;
+    const wchar_t *expected_segment;
+} heur_tuple;
 
-HEUR_TEST_SELECTED_PATTERN(
-    test_heur_prep__longest_has_correct_bm_pattern__bracket_ere,
-    L"[opt]literal", REG_EXTENDED, L"literal"
-)
+/* Prefix heuristics is only used when the pattern may contain
+ * newlines AND we don't know its length AND REG_NEWLINE is not set.
+ * Also, obviously, it has to have a literal prefix. */
+#define PREF_SUCC_LEN 12
+static heur_tuple prefix_successes[PREF_SUCC_LEN] = {
+    /* Explicit newlines with unknown max length */
+    {L"\nliteralx*", 0, L"\nliteral"},
+    {L"\nliteralx*", REG_EXTENDED, L"\nliteral"},
+    {L"\nliteral+", REG_EXTENDED, L"\nliteral"},
 
-HEUR_TEST_SELECTED_PATTERN(
-    test_heur_prep__longest_has_correct_bm_pattern__bracket_caret,
-    L"[^opt]literal", REG_EXTENDED, L"literal"
-)
+    /* Literal newlines with unknown max length */
+    {L"\\nliteralx*", 0, L"\nliteral"},
+    {L"\\nliteralx*", REG_EXTENDED, L"\nliteral"},
+    {L"\\nliteral+", REG_EXTENDED, L"\nliteral"},
 
-Suite *create_heur_suite()
+    /* Specific syntaxes which can include newlines with unknown max length */
+    {L"literal[^x]x*", REG_EXTENDED, L"literal"},
+    {L"literal[\n]x*", REG_EXTENDED, L"literal"},
+    {L"literal(.)", REG_EXTENDED, L"literal"},
+    {L"literal(\n)", REG_EXTENDED, L"literal"},
+    {L"literal.x*", REG_EXTENDED, L"literal"},
+    {L"literal.+", REG_EXTENDED, L"literal"},
+};
+
+/* In general scenarios, longest heuristics is used. */
+#define LONG_SUCC_LEN 27
+static heur_tuple longest_successes[LONG_SUCC_LEN] = {
+    /** Literal at beginning of text **/
+    /* Literal pattern */
+    {L"pattern", 0, L"pattern"},
+    /* Both BRE and ERE */
+    {L"literal[opt]", 0, L"literal"},
+    {L"literal[opt]", REG_EXTENDED, L"literal"},
+    {L"literal[^opt]", REG_EXTENDED, L"literal"},
+    {L"literalx*", 0, L"literal"},
+    {L"literalx*", REG_EXTENDED, L"literal"},
+    {L"literal.", 0, L"literal"},
+    {L"literal.", REG_EXTENDED, L"literal"},
+    /* BRE and ERE inverted */
+    {L"literal\\(grp\\)", 0, L"literal"},
+    {L"literal(grp)", REG_EXTENDED, L"literal"},
+    {L"literalx\\{1,2\\}", 0, L"literal"},
+    {L"literalx{1,2}", REG_EXTENDED, L"literal"},
+    /* Only in ERE */
+    {L"literal+", REG_EXTENDED, L"literal"},
+    {L"literalx?", REG_EXTENDED, L"literal"},
+
+    /** Literal at end of text **/
+    /* Both BRE and ERE */
+    {L"[opt]literal", 0, L"literal"},
+    {L"[opt]literal", REG_EXTENDED, L"literal"},
+    {L"[^opt]literal", REG_EXTENDED, L"literal"},
+    {L"x*literal", 0, L"literal"},
+    {L"x*literal", REG_EXTENDED, L"literal"},
+    {L".literal", 0, L"literal"},
+    {L".literal", REG_EXTENDED, L"literal"},
+    /* BRE and ERE inverted */
+    {L"\\(grp\\)literal", 0, L"literal"},
+    {L"(grp)literal", REG_EXTENDED, L"literal"},
+    {L"x\\{1,2\\}literal", 0, L"literal"},
+    {L"x{1,2}literal", REG_EXTENDED, L"literal"},
+    /* Only in ERE */
+    {L"x+literal", REG_EXTENDED, L"literal"},
+    {L"x?literal", REG_EXTENDED, L"literal"}
+};
+
+START_TEST(loop_test_heur__successes__prefix_succeeds)
+{
+    heur_tuple current = prefix_successes[_i];
+    heur_t *heur = run_and_return_prep(current.pattern, current.flags);
+
+    ck_assert_msg(heur != NULL, "Preprocessing returned NULL heuristic!");
+
+    int cmp = wcscmp(current.expected_segment, heur->literal_prep->wide.pattern);
+    ck_assert_msg(cmp == 0,
+        "Preprocessing returned incorrect heuristic segment: returned '%ls', expected '%ls' for pattern '%ls' with flags '%d'",
+        heur->literal_prep->wide.pattern, current.expected_segment, current.pattern, current.flags
+    );
+
+    ck_assert_msg(heur->heur_type == HEUR_PREFIX,
+        "Preprocessing incorrectly did not create prefix heuristics: returned '%d' for pattern '%ls' with flags '%d'",
+        heur->heur_type, current.pattern, current.flags
+    );
+}
+END_TEST
+
+START_TEST(loop_test_heur__successes__longest_succeeds)
+{
+    heur_tuple current = longest_successes[_i];
+    heur_t *heur = run_and_return_prep(current.pattern, current.flags);
+
+    ck_assert_msg(heur != NULL, "Preprocessing returned NULL heuristic!");
+
+    int cmp = wcscmp(current.expected_segment, heur->literal_prep->wide.pattern);
+    ck_assert_msg(cmp == 0,
+        "Preprocessing returned incorrect heuristic segment: returned '%ls', expected '%ls' for pattern '%ls' with flags '%d'",
+        heur->literal_prep->wide.pattern, current.expected_segment, current.pattern, current.flags
+    );
+
+    ck_assert_msg(heur->heur_type == HEUR_LONGEST,
+        "Preprocessing incorrectly did not create prefix heuristics: returned '%d' for pattern '%ls' with flags '%d'",
+        heur->heur_type, current.pattern, current.flags
+    );
+}
+END_TEST
+
+
+static Suite *
+create_suite()
 {
 	Suite *suite = suite_create("Heuristics");
 
 	TCase *tc_prep = tcase_create("Preprocessing");
 
-	/* Sanity checks. */
-	tcase_add_test(tc_prep, test_heur_prep__literal_ok);
-	tcase_add_test(tc_prep, test_heur_prep__prefix_ok);
-	tcase_add_test(tc_prep, test_heur_prep__longest_ok);
-
-    /* Literal tests. */
-    tcase_add_test(tc_prep, test_heur_prep__literal_has_correct_bm_pattern);
-
-	/* Prefix tests. */
-    tcase_add_test(tc_prep, test_heur_prep__prefix_has_correct_bm_pattern__bracket_bre);
-    tcase_add_test(tc_prep, test_heur_prep__prefix_has_correct_bm_pattern__bracket_ere);
-    tcase_add_test(tc_prep, test_heur_prep__prefix_has_correct_bm_pattern__bracket_caret);
-
-	/* Longest tests. */
-    tcase_add_test(tc_prep, test_heur_prep__longest_has_correct_bm_pattern__bracket_ere);
-    tcase_add_test(tc_prep, test_heur_prep__longest_has_correct_bm_pattern__bracket_caret);
-    tcase_add_test(tc_prep, test_heur_prep__longest_has_correct_bm_pattern__bracket_bre);
+    tcase_add_test(tc_prep, test_heur__sanity__literal_ok);
+    tcase_add_loop_test(tc_prep, loop_test_heur__successes__prefix_succeeds, 0, PREF_SUCC_LEN);
+    tcase_add_loop_test(tc_prep, loop_test_heur__successes__longest_succeeds, 0, LONG_SUCC_LEN);
 
 	suite_add_tcase(suite, tc_prep);
 
 	return suite;
 }
 
-int main(void)
+int
+main(void)
 {
-	Suite *suite = create_heur_suite();
+	Suite *suite = create_suite();
 	SRunner *runner = srunner_create(suite);
 
 	srunner_run_all(runner, CK_NORMAL);

@@ -77,7 +77,7 @@ static int
 compile_heuristic(
     frec_t *frec, const wchar_t *pattern, size_t len, int cflags)
 {
-    heur_t *heur = malloc(sizeof(heur_t));
+    heur_t *heur = frec_create_heur();
     if (heur == NULL) {
         return (REG_ESPACE);
     }
@@ -91,7 +91,6 @@ compile_heuristic(
     } else {
         frec->heuristic = NULL;
         frec_free_heur(heur);
-        free(heur);
     }
 
     return ret;

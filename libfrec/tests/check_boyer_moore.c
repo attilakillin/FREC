@@ -6,6 +6,10 @@
 #include "boyer-moore.h"
 #include "type-unification.h"
 
+/* 
+ * Runs the Boyer-Moore preprocessing phase. Takes the text literally.
+ * Returns the result of the preprocessing call.
+ */
 static int
 run_preprocess_literal(const wchar_t *pattern, int flags)
 {
@@ -17,6 +21,10 @@ run_preprocess_literal(const wchar_t *pattern, int flags)
     return ret;
 }
 
+/* 
+ * Runs the Boyer-Moore preprocessing phase with full regex parsing.
+ * Returns the result of the preprocessing call.
+ */
 static int
 run_preprocess_full(const wchar_t *pattern, int flags)
 {
@@ -28,6 +36,11 @@ run_preprocess_full(const wchar_t *pattern, int flags)
     return ret;
 }
 
+/* 
+ * Runs the Boyer-Moore execution phase. Asserts that the preprocessing
+ * succeeded, and returns the final execution return value as well as any
+ * potential matches in the matches input variable.
+ */
 static int
 run_execute(
     frec_match_t *matches, size_t match_cnt,
@@ -64,6 +77,7 @@ START_TEST(test_bm__sanity__full_prep_ok)
     ck_assert_msg(ret == REG_OK, "Sanity full preprocessing failed: returned '%d'", ret);
 }
 END_TEST
+
 
 typedef struct prep_tuple {
     const wchar_t *pattern;

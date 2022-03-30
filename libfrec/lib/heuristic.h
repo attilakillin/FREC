@@ -16,6 +16,7 @@ typedef struct heur_t {
 	int heur_type;				/* The type of the heuristic. */
 } heur_t;
 
+heur_t *frec_create_heur();
 void frec_free_heur(heur_t *h);
 
 int frec_proc_heur(heur_t *heur, const wchar_t *pattern, size_t len, int cflags);

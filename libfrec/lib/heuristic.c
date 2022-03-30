@@ -328,7 +328,12 @@ frec_preprocess_heur(
 
 heur_t *frec_create_heur()
 {
-    
+    heur_t *heur = malloc(sizeof(heur_t));
+    if (heur == NULL) {
+        return NULL;
+    }
+
+    return heur;
 }
 
 void
@@ -336,5 +341,6 @@ frec_free_heur(heur_t *heur)
 {
     if (heur != NULL) {
         bm_free_preproc(heur->literal_prep);
+        free(heur);
     }
 }

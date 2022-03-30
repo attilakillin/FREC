@@ -88,15 +88,8 @@ frec_regwcomp(frec_t *preg, const wchar_t *regex, int cflags)
 void
 frec_regfree(frec_t *preg)
 {
-	if (preg->boyer_moore != NULL) {
-		bm_free_preproc(preg->boyer_moore);
-	}
-
-	if (preg->heuristic != NULL) {
-		frec_free_heur(preg->heuristic);
-		free(preg->heuristic);
-	}
-
+	bm_free_preproc(preg->boyer_moore);
+	frec_free_heur(preg->heuristic);
 	_dist_regfree(&preg->original);
 }
 
