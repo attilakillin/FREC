@@ -24,8 +24,6 @@ compile_and_run(
 }
 
 
-
-
 typedef struct match_tuple {
 	const char *pattern;
 	const char *text;
@@ -34,9 +32,18 @@ typedef struct match_tuple {
 	frec_match_t matches[10];
 } match_tuple;
 
-#define INPUT_LEN 1
+#define INPUT_LEN 5
 static match_tuple inputs[INPUT_LEN] = {
-	{"pattern", "text with pattern", 0, 2, {{10, 17}, {-1, -1}}}
+	/* Literal matching */
+	{"pattern", "text with pattern", 0, 2, {{10,17}, {-1,-1}}},
+	{"many", "many many many many", 0, 5, {{0,4}, {5,9}, {10,14}, {15,19}, {-1,-1}}},
+	
+	/* Literal matching with escapes */
+	{"\\$()\\$", "text with $()$ chars", 0, 2, {{10,14}, {-1,-1}}},
+
+	/* Longest matching */
+	{"p..ce", "piece peace pounce", 0, 3, {{0,5}, {6,11}, {-1,-1}}},
+	{"[ai][cx]e", "words with the letter e but only axe matches", 0, 2, {{33,36}, {-1,-1}}}
 };
 
 

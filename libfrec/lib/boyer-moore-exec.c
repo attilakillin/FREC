@@ -76,11 +76,12 @@ static bool eol_matches_wide(const wchar_t *text, size_t text_len, size_t end_po
 static int
 exec_turbo_bm_stnd(
     frec_match_t result[], size_t nmatch,
-    bm_preproc_t *prep, const char *text, size_t len,
+    bm_preproc_t *prep, const char *text, size_t _len,
     bool store_matches)
 {
     int res_cnt = 0; /* A new match will be written to this index of result. */
 
+    int len = _len; /* Because it's important that this is signed. */
     int srch_pos = 0; /* The current start pos in the text of our search. */
     int pat_len = prep->stnd.len; /* The length of the pattern. */
     unsigned int *good_shs = prep->stnd.goods_shifts;

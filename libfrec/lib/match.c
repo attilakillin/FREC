@@ -24,8 +24,8 @@ match_original(
 
     /* Call the correct library function. */
     int ret = (text->is_wide)
-        ? _dist_regnexec(preg, text->stnd, text->len, nmatch, matches, eflags)
-        : _dist_regwnexec(preg, text->wide, text->len, nmatch, matches, eflags);
+        ? _dist_regwnexec(preg, text->wide, text->len, nmatch, matches, eflags)
+        : _dist_regnexec(preg, text->stnd, text->len, nmatch, matches, eflags);
 
     /* Copy results into own frec_match_t array. */
     if (ret == REG_OK) {

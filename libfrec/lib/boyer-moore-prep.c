@@ -117,15 +117,16 @@ fill_badc_shifts_wide(bm_preproc_wt *wide, bool ignore_case)
  */
 static int
 calculate_good_shifts(
-	unsigned int *table, char *pattern, size_t width, size_t len)
+	unsigned int *table, char *pattern, size_t width, size_t _len)
 {
 	/* Calculate suffixes (as per the specification of the BM algorithm). */
 
-	int *suff = malloc(sizeof(int) * len);
+	int *suff = malloc(sizeof(int) * _len);
 	if (suff == NULL) {
 		return (REG_ESPACE);
 	}
 
+	int len = _len;
 	suff[len - 1] = len;
 
 	int f = 0;
@@ -433,8 +434,10 @@ strip_specials(
 		len--;
 	}
 
-	/* If the only character remaining is a $, do the same. */
-	if (len >= 1 && pattern[len - 1] == L'$') {
+	/* If the last character is a $ with special meaning, do the same. */
+	if (len >= 1 && pattern[len - 1] == L'$'
+		&& (len == 1 || pattern[len - 2] != L'\\')
+	) {
 		out_flags->f_lineend = true;
 		len--;
 	}
