@@ -2,7 +2,7 @@
 #define MATCH_H 1
 
 #include "frec-internal.h"
-#include "type-unification.h"
+#include "string-type.h"
 
 /*
  * Given a match array with len elements, return the number of

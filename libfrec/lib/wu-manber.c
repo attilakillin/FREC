@@ -25,7 +25,7 @@
  */
 
 #include <stdlib.h>
-#include <string.h>
+#include <string-type.h>
 
 #include "hashtable.h"
 #include "frec-internal.h"

@@ -3,12 +3,12 @@
 
 #include <tre/regex.h>
 
-typedef struct bm_preproc_t bm_preproc_t;
+typedef struct bm_comp bm_comp;
 typedef struct heur_t heur_t;
 
 typedef struct frec_t {
     regex_t original;           /* Compiled automaton data used by TRE. */
-    bm_preproc_t *boyer_moore;  /* Compiled Boyer-Moore search data. */
+    bm_comp *boyer_moore;       /* Compiled Boyer-Moore search data. */
     heur_t *heuristic;          /* Compiled FREC heuristic data. */
     int cflags;                 /* Input compilation flags. */
 

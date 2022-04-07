@@ -2,7 +2,7 @@
 #include <frec-config.h>
 
 #include "match.h"
-#include "type-unification.h"
+#include "string-type.h"
 
 /* Utility functions. */
 static int max(long a, long b) { return (a > b) ? a : b; }
@@ -86,8 +86,8 @@ match_heuristic(
 
             /* For each candidate match: */
             for (size_t i = 0; i < count; i++) {
-                size_t start = cands[i].soffset;
-                size_t end = cands[i].eoffset;
+                long start = cands[i].soffset;
+                long end = cands[i].eoffset;
 
                 if (heur->max_length != -1) {
                     /* If we know the max length of a match, set start
@@ -111,7 +111,7 @@ match_heuristic(
                  * matches on the same line may have the same start and end
                  * values). */
                 if (match_idx > 0) {
-                    size_t prev_end = pmatch[match_idx - 1].eoffset;
+                    long prev_end = pmatch[match_idx - 1].eoffset;
 
                     start = max(start, prev_end - glob_offset);
                     end = max(end, start);

@@ -24,9 +24,8 @@
  * SUCH DAMAGE.
  */
 
-#include <sys/types.h>
 #include <stdlib.h>
-#include <string.h>
+#include <string-type.h>
 #include <wchar.h>
 
 #include "compile.h"

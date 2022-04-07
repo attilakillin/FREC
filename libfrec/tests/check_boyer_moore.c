@@ -3,8 +3,8 @@
 #include <frec.h>
 #include <stdlib.h>
 
-#include "boyer-moore.h"
-#include "type-unification.h"
+#include "bm.h"
+#include "string-type.h"
 
 /* 
  * Runs the Boyer-Moore preprocessing phase. Takes the text literally.

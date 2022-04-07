@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 
-#include "boyer-moore.h"
+#include "bm.h"
 
 #define MAX_FRAGMENTS 32
 

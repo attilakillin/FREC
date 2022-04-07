@@ -1,6 +1,6 @@
 
 #include <stdlib.h>
-#include <string.h>
+#include <string-type.h>
 #include <wchar.h>
 #include <frec-config.h>
 

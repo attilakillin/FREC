@@ -24,10 +24,8 @@
  * SUCH DAMAGE.
  */
 
-#include <sys/types.h>
 #include <stdlib.h>
-#include <string.h>
-#include <wchar.h>
+#include <string-type.h>
 #include <frec-config.h>
 
 #include "convert.h"

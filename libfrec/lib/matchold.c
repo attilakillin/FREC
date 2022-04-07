@@ -26,13 +26,13 @@
 
 #include <sys/types.h>
 #include <stdlib.h>
-#include <string.h>
+#include <string-type.h>
 #include <wchar.h>
 
-#include "boyer-moore.h"
+#include "bm.h"
 #include "match.h"
 #include "frec-internal.h"
-#include "type-unification.h"
+#include "string-type.h"
 #include "wu-manber.h"
 
 int
