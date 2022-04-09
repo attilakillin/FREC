@@ -12,7 +12,7 @@
 static int
 run_preprocess(const wchar_t *pattern, int flags)
 {
-    heur_t *prep = frec_create_heur();
+    heur *prep = frec_create_heur();
 
     int ret = frec_preprocess_heur(prep, pattern, wcslen(pattern), flags);
 
@@ -22,12 +22,12 @@ run_preprocess(const wchar_t *pattern, int flags)
 
 /* 
  * Runs the heuristics preprocessing phase with full regex parsing.
- * Returns the created heur_t struct. Asserts that compilation succeeded.
+ * Returns the created heur struct. Asserts that compilation succeeded.
  */
-static heur_t *
+static heur *
 run_and_return_prep(const wchar_t *pattern, int flags)
 {
-    heur_t *prep = frec_create_heur();
+    heur *prep = frec_create_heur();
 
     int ret = frec_preprocess_heur(prep, pattern, wcslen(pattern), flags);
     ck_assert_msg(ret == REG_OK,
@@ -136,14 +136,14 @@ static heur_tuple longest_successes[LONG_SUCC_LEN] = {
 START_TEST(loop_test_heur__successes__prefix_succeeds)
 {
     heur_tuple current = prefix_successes[_i];
-    heur_t *heur = run_and_return_prep(current.pattern, current.flags);
+    heur *heur = run_and_return_prep(current.pattern, current.flags);
 
     ck_assert_msg(heur != NULL, "Preprocessing returned NULL heuristic!");
 
-    int cmp = wcscmp(current.expected_segment, heur->literal_prep->wide.pattern);
+    int cmp = wcscmp(current.expected_segment, heur->literal_comp->wide.pattern);
     ck_assert_msg(cmp == 0,
-        "Preprocessing returned incorrect heuristic segment: returned '%ls', expected '%ls' for pattern '%ls' with flags '%d'",
-        heur->literal_prep->wide.pattern, current.expected_segment, current.pattern, current.flags
+                  "Preprocessing returned incorrect heuristic segment: returned '%ls', expected '%ls' for pattern '%ls' with flags '%d'",
+                  heur->literal_comp->wide.pattern, current.expected_segment, current.pattern, current.flags
     );
 
     ck_assert_msg(heur->heur_type == HEUR_PREFIX,
@@ -156,14 +156,14 @@ END_TEST
 START_TEST(loop_test_heur__successes__longest_succeeds)
 {
     heur_tuple current = longest_successes[_i];
-    heur_t *heur = run_and_return_prep(current.pattern, current.flags);
+    heur *heur = run_and_return_prep(current.pattern, current.flags);
 
     ck_assert_msg(heur != NULL, "Preprocessing returned NULL heuristic!");
 
-    int cmp = wcscmp(current.expected_segment, heur->literal_prep->wide.pattern);
+    int cmp = wcscmp(current.expected_segment, heur->literal_comp->wide.pattern);
     ck_assert_msg(cmp == 0,
-        "Preprocessing returned incorrect heuristic segment: returned '%ls', expected '%ls' for pattern '%ls' with flags '%d'",
-        heur->literal_prep->wide.pattern, current.expected_segment, current.pattern, current.flags
+                  "Preprocessing returned incorrect heuristic segment: returned '%ls', expected '%ls' for pattern '%ls' with flags '%d'",
+                  heur->literal_comp->wide.pattern, current.expected_segment, current.pattern, current.flags
     );
 
     ck_assert_msg(heur->heur_type == HEUR_LONGEST,

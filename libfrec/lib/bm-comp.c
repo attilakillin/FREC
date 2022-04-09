@@ -26,6 +26,7 @@
 
 #include <ctype.h>
 #include <frec-config.h>
+#include <limits.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string-type.h>
@@ -34,6 +35,18 @@
 #include "bm.h"
 #include "bm-type.h"
 #include "regex-parser.h"
+
+// Utility function. Asserts that str[at] equals stnd or wide in the correct
+// sub-array.
+static bool
+string_has_char_at(string str, ssize_t at, char stnd, wchar_t wide)
+{
+    if (str.is_wide) {
+        return str.wide[at] == wide;
+    } else {
+        return str.stnd[at] == stnd;
+    }
+}
 
 // Fills the bad character shift table in the given compilation struct.
 // Standard character version.
@@ -44,34 +57,31 @@ fill_badc_shifts_stnd(bm_comp *comp)
 	ssize_t len = comp->pattern.len;
 	uint *table = comp->bad_shifts_stnd;
 
-	/* For every character in the alphabet, set the shift to length + 1. */
+	// For every character in the alphabet, set the shift to length + 1.
 	for (size_t i = 0; i <= UCHAR_MAX; i++) {
 		table[i] = len;
 	}
 
-	/* For characters present in the word: */
-	/* NB: the last character is skipped, because no jump occurs when the
-	 * current character of the text is the same as the last pattern char. */
+	// For characters present in the word:
+	// NB: the last character is skipped, because no jump occurs when the
+    // current character of the text is the same as the last pattern char.
 	for (size_t i = 0; i < len - 1; i++) {
 		char c = pattern[i];
 
-		/* Ignore case if necessary. */
+		// Ignore case if necessary.
 		if (comp->is_icase_set) {
 			c = tolower((u_char) c);
 		}
 
-		/* Set the shift value to their distance from the end of the word. */
+		// Set the shift value to their distance from the end of the word.
 		table[c] = len - 1 - i;
 	}
 
 	return (REG_OK);
 }
 
-/*
- * Fills the bad character shift table in the given wide preprocessing struct.
- * Wide character version. Optionally, the case can be ignored.
- * Initializes a hashtable struct as wide->badc_shifts, which must be freed!
- */
+// Fills the bad character shift table in the given compilation struct.
+// Wide character version.
 static int
 fill_badc_shifts_wide(bm_comp *comp)
 {
@@ -81,23 +91,23 @@ fill_badc_shifts_wide(bm_comp *comp)
 	hashtable *table = hashtable_init(len * 8, sizeof(wchar_t), sizeof(int));
 	comp->bad_shifts_wide = table;
 
-	/* If initialization fails, return early. */
+	// If initialization fails, return early.
 	if (table == NULL) {
 		return (REG_ESPACE);
 	}
 
-	/* For characters present in the word: */
-	/* NB: the last character is skipped, because no jump occurs when the
-	 * current character of the text is the same as the last pattern char. */
+	// For characters present in the word:
+	// NB: the last character is skipped, because no jump occurs when the
+    // current character of the text is the same as the last pattern char.
 	for (ssize_t i = 0; i < len - 1; i++) {
 		wchar_t c = pattern[i];
 		
-		/* Ignore case if necessary. */
+		// Ignore case if necessary. */
 		if (comp->is_icase_set) {
 			c = (wchar_t) towlower(c);
 		}
 
-		/* Set the shift value to their distance from the end of the word. */
+		// Set the shift value to their distance from the end of the word.
 		ssize_t value = len - 1 - i;
 		int res = hashtable_put(table, &c, &value);
 		if (res == HASH_FAIL || res == HASH_FULL) {
@@ -114,7 +124,7 @@ calculate_good_shifts(uint *table, string *pattern)
 {
     ssize_t len = pattern->len;
 
-	/* Calculate suffixes (as per the specification of the BM algorithm). */
+	// Calculate suffixes (as per the specification of the BM algorithm).
 	ssize_t *suff = malloc(sizeof(ssize_t) * pattern->len);
 	if (suff == NULL) {
 		return (REG_ESPACE);
@@ -149,7 +159,7 @@ calculate_good_shifts(uint *table, string *pattern)
 		}
 	}
 
-	/* Calculate good suffix shifts. */
+	// Calculate good suffix shifts.
 
 	for (ssize_t i = 0; i < len; i++) {
 		table[i] = len;
@@ -215,20 +225,12 @@ fill_good_shifts(bm_comp *comp)
 
 	// If the case was ignored or an error occurred, the copy is freed.
 	if (comp->is_icase_set || res != REG_OK) {
-		free(pattern);
+		string_free(pattern);
 	}
 
 	return res;
 }
 
-
-/*
- * Given a result struct and a pattern with the given length, execute the
- * Boyer-Moore preprocessing phase as if the pattern was a literal text.
- * Additional flags can be passed using the cflags parameter.
- * Returns REG_OK if the pattern preprocessing was successful, REG_ESPACE
- * if a memory error occurred and REG_BADPAT if the compilation failed.
- */
 int
 bm_compile_literal(bm_comp *comp, string patt, int cflags)
 {
@@ -253,15 +255,13 @@ bm_compile_literal(bm_comp *comp, string patt, int cflags)
         return (REG_ESPACE);
     }
 
-    int ret = (comp->is_icase_set)
+    int ret = (comp->pattern.is_wide)
         ? fill_badc_shifts_wide(comp)
         : fill_badc_shifts_stnd(comp);
-    if (ret != REG_OK) {
-        bm_comp_free(comp);
-        return ret;
+    if (ret == REG_OK) {
+        ret = fill_good_shifts(comp);
     }
 
-    ret = fill_good_shifts(comp);
 	if (ret != REG_OK) {
         bm_comp_free(comp);
 		return ret;
@@ -270,51 +270,56 @@ bm_compile_literal(bm_comp *comp, string patt, int cflags)
 	return (REG_OK);
 }
 
-/*
- * Strips escape characters from the given in_pat pattern (of in_len) length,
- * and outputs the literal text result into out_pat (and its length into
- * out_len).
- * Input flags can be specified in in_flags, while output flags are set in the
- * given out_flags preprocessing struct.
- */
+// Strips escape characters from the given str pattern and outputs the
+// literal text result into out_str.
+// Input flags can be specified in in_flags, while output flags are set in the
+// given comp compilation struct.
 static int
-strip_specials_wide(
-    const string in_str, string *out_str,
-    int in_flags, bm_comp *out_flags
+strip_specials(
+    string str, string *out_str,
+    int in_flags, bm_comp *comp
 ) {
-	const wchar_t *pattern = in_str.wide;
-    wchar_t *out_pat = out_str->wide;
-	size_t len = in_str.len;
+	ssize_t len = str.len;
 
 	/* If the first character is ^, set the given flag and continue. */
-	if (pattern[0] == L'^') {
-		out_flags->has_bol_anchor = true;
-		pattern++;
-		len--;
+	if (string_has_char_at(str, 0, '^', L'^')) {
+		comp->has_bol_anchor = true;
+        string_offset(&str, 1);
 	}
 
 	/* If the last character is a $ with special meaning, do the same. */
-	if (len >= 1 && pattern[len - 1] == L'$'
-        && (len == 1 || pattern[len - 2] != L'\\')
+	if (
+        (len >= 1 && string_has_char_at(str, len - 1, '$', L'$'))
+        && (len == 1 || string_has_char_at(str, len - 2, '\\', L'\\'))
 	) {
-		out_flags->has_eol_anchor = true;
-		len--;
+		comp->has_eol_anchor = true;
+		str.len--;
 	}
 
-	regex_parser_t parser;
+	regex_parser parser;
 	parser.escaped = false;
 	parser.extended = in_flags & REG_EXTENDED;
 
 	ssize_t pos = 0;
 	/* Traverse the given pattern: */
 	for (ssize_t i = 0; i < len; i++) {
-		wchar_t c = pattern[i];
+        wchar_t c;
+        if (str.is_wide) {
+            c = str.wide[i];
+        } else {
+            c = (wchar_t) btowc(str.stnd[i]);
+        }
+
 		switch (parse_wchar(&parser, c)) {
 			case NORMAL_CHAR:
-				out_pat[pos++] = c;
+                (str.is_wide)
+                    ? (str.wide[pos++] = c)
+                    : (str.stnd[pos++] = str.stnd[i]);
 				break;
 			case NORMAL_NEWLINE:
-				out_pat[pos++] = L'\n';
+                (str.is_wide)
+                    ? (str.wide[pos++] = L'\n')
+                    : (str.stnd[pos++] = '\n');
 				break;
 			case SHOULD_SKIP:
 				break;
@@ -325,100 +330,34 @@ strip_specials_wide(
 	}
 
 	/* End the pattern with terminating null character and set length. */
-	out_pat[pos] = L'\0';
+    (str.is_wide)
+        ? (out_str->wide[pos] = L'\0')
+        : (out_str->stnd[pos] = '\0');
 	out_str->len = pos;
 
 	return (REG_OK);
 }
 
-static int
-strip_specials_stnd(
-        const string in_str, string *out_str,
-        int in_flags, bm_comp *out_flags
-) {
-    const char *pattern = in_str.stnd;
-    char *out_pat = out_str->stnd;
-    size_t len = in_str.len;
-
-    /* If the first character is ^, set the given flag and continue. */
-    if (pattern[0] == '^') {
-        out_flags->has_bol_anchor = true;
-        pattern++;
-        len--;
-    }
-
-    /* If the last character is a $ with special meaning, do the same. */
-    if (len >= 1 && pattern[len - 1] == '$'
-        && (len == 1 || pattern[len - 2] != '\\')
-            ) {
-        out_flags->has_eol_anchor = true;
-        len--;
-    }
-
-    regex_parser_t parser;
-    parser.escaped = false;
-    parser.extended = in_flags & REG_EXTENDED;
-
-    ssize_t pos = 0;
-    /* Traverse the given pattern: */
-    for (ssize_t i = 0; i < len; i++) {
-        char c = pattern[i];
-        switch (parse_wchar(&parser, (wchar_t) c)) {
-            case NORMAL_CHAR:
-                out_pat[pos++] = c;
-                break;
-            case NORMAL_NEWLINE:
-                out_pat[pos++] = '\n';
-                break;
-            case SHOULD_SKIP:
-                break;
-                /* If any special character was found, we abort. */
-            default:
-                return (REG_BADPAT);
-        }
-    }
-
-    /* End the pattern with terminating null character and set length. */
-    out_pat[pos] = '\0';
-    out_str->len = pos;
-
-    return (REG_OK);
-}
-
-/*
- * Given a result struct and a pattern with the given length, execute the
- * Boyer-Moore preprocessing phase while ignoring escaped characters.
- * Additional flags can be passed using the cflags parameter.
- * Returns REG_OK if the pattern preprocessing was successful, REG_ESPACE
- * if a memory error occurred and REG_BADPAT if the given pattern could not
- * be reduced to a literal text string.
- */
 int
 bm_compile_full(bm_comp *comp, string patt, int cflags)
 {
-	/* We'll execute literal preprocessing on a clean pattern. */
-    string *clean_pattern = NULL;
-    bool success = string_duplicate(clean_pattern, patt);
+	// We'll execute literal preprocessing on a clean pattern.
+    string clean_pattern;
+    bool success = string_duplicate(&clean_pattern, patt);
     if (!success) {
         return (REG_ESPACE);
     }
-    clean_pattern->len = 0;
+    clean_pattern.len = 0;
 
-    int ret;
-    if (patt.is_wide) {
-        ret = strip_specials_wide(patt, clean_pattern, cflags, comp);
-    } else {
-        ret = strip_specials_stnd(patt, clean_pattern, cflags, comp);
-    }
-
+    int ret = strip_specials(patt, &clean_pattern, cflags, comp);
 	if (ret != REG_OK) {
-		free(clean_pattern);
+        string_free(&clean_pattern);
 		return ret;
 	}
 
-	/* Execute literal preprocessing. */
-	ret = bm_compile_literal(comp, *clean_pattern, cflags);
+	// Execute literal preprocessing.
+	ret = bm_compile_literal(comp, clean_pattern, cflags);
 
-	free(clean_pattern);
+	string_free(&clean_pattern);
 	return ret;
 }

@@ -111,13 +111,8 @@ exec_turbo_bm_stnd(
                 res_cnt++;
             }
 
-            /* If nmatch was 0, or we found the required match amount, return. */
-            if (res_cnt >= nmatch) {
-                return (REG_OK);
-            }
-            
-            shift = good_shs[0];
-            prev_suf = pat_len - shift;
+            // In any case, we found a match. Returning.
+            return (REG_OK);
         } else {
             /* Apply Turbo-BM calculations. */
             ssize_t v = pat_len - 1 - i;
@@ -183,7 +178,7 @@ exec_turbo_bm_wide(
         }
 
         /* If i < 0, the whole pattern matched with the text,
-         * if not, there was a mismatch and we can shift the search. */
+         * if not, there was a mismatch, and we can shift the search. */
         if (i < 0) {
             if ((!comp->has_bol_anchor || bol_matches_wide(text, srch_pos)) &&
                 (!comp->has_eol_anchor || eol_matches_wide(text, len, srch_pos + pat_len)) &&
@@ -193,13 +188,8 @@ exec_turbo_bm_wide(
                 res_cnt++;
             }
 
-            /* If nmatch was 0, or we found the required match amount, return. */
-            if (res_cnt >= nmatch) {
-                return (REG_OK);
-            }
-            
-            shift = good_shs[0];
-            prev_suf = pat_len - shift;
+            // In any case, we found a match. Returning.
+            return (REG_OK);
         } else {
             /* Apply Turbo-BM calculations. */
             ssize_t v = pat_len - 1 - i;
@@ -266,7 +256,7 @@ bm_execute(
         if (store_matches) {
             result[0].soffset = 0;
             result[0].eoffset = len;
-            /* If we expected more matches, signal the boundary here */
+            /* If we expected more submatches, signal the boundary here */
             if (nmatch > 1) {
                 result[1].soffset = -1;
                 result[1].eoffset = -1;
@@ -278,7 +268,7 @@ bm_execute(
     /* If BOL and EOL don't match the start and end of the text, we won't
      * accept any matches that are at the very beginning or the very end. */
     if (comp->has_bol_anchor && no_bol_anchor) {
-        text.is_wide ? text.wide++ : text.stnd++;
+        text.is_wide ? (text.wide++) : (text.stnd++);
         len--;
     }
     if (comp->has_eol_anchor && no_eol_anchor) {

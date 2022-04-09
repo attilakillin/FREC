@@ -1,6 +1,5 @@
 #include <malloc.h>
 #include <string.h>
-
 #include "string-type.h"
 
 void
@@ -56,7 +55,7 @@ string_copy(string *str, const void *content, ssize_t len, bool is_wide)
 bool
 string_duplicate(string *target, string src)
 {
-    void *content = (src.is_wide) ? (src.wide) : (src.stnd);
+    void *content = ((src.is_wide) ? src.wide : src.stnd);
     return string_copy(target, content, src.len, src.is_wide);
 }
 
@@ -69,39 +68,37 @@ string_free(string *str)
     }
 }
 
-/*
 void
-string_offset_by(str_t *string, size_t offset)
+string_offset(string *str, ssize_t offset)
 {
-    if (string->len >= offset) {
-        string->len -= offset;
-        if (string->is_wide) {
-            string->wide += offset;
-        } else {
-            string->stnd += offset;
-        }
+    if (offset < 0) {
+        return;
+    }
+
+    if (offset > str->len) {
+        offset = str->len;
+    }
+
+    if (str->is_wide) {
+        str->wide += offset;
     } else {
-        string->len = 0;
-        string->stnd = NULL;
-        string->wide = NULL;
+        str->stnd += offset;
+    }
+    str->len -= offset;
+}
+
+void
+string_borrow_section(string *target, string src, ssize_t start, ssize_t end)
+{
+    target->is_wide = src.is_wide;
+    target->len = end - start;
+    target->owned = false;
+
+    if (target->is_wide) {
+        target->wide = src.wide + start;
+        target->stnd = NULL;
+    } else {
+        target->wide = NULL;
+        target->stnd = src.stnd + start;
     }
 }
-
-void
-string_copy(str_t *dest, const str_t *src)
-{
-    dest->is_wide = src->is_wide;
-    dest->stnd = src->stnd;
-    dest->wide = src->wide;
-    dest->len = src->len;
-}
-
-void
-string_excerpt(str_t *dest, const str_t *src, size_t start, size_t end)
-{
-    dest->is_wide = src->is_wide;
-    dest->len = end - start;
-    dest->stnd = (!src->is_wide) ? (src->stnd + start) : NULL;
-    dest->wide = (src->is_wide) ? (src->wide + start) : NULL;
-}
-*/

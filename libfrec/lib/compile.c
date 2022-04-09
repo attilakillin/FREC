@@ -33,15 +33,12 @@
 #include "frec-internal.h"
 #include "wu-manber.h"
 
-/*
- * Compiles the bm_prep field of the frec struct based on the
- * given pattern with the given length.
- * Additional flags can be specified in the cflags field.
- */
+// Compiles the bm_prep field of the frec struct based on the given pattern.
+// Additional flags can be specified in the cflags field.
 static int
 compile_boyer_moore(frec_t *frec, string pattern, int cflags)
 {
-    /* If the pattern is too short, literal matching is inefficient. */
+    // If the pattern is too short, literal matching is inefficient.
     if (pattern.len < 2) {
         frec->boyer_moore = NULL;
     }
@@ -52,12 +49,12 @@ compile_boyer_moore(frec_t *frec, string pattern, int cflags)
     }
     bm_comp_init(comp, cflags);
     
-    /* Based on the literal flag, choose apppropriate preprocessing. */
+    // Based on the literal flag, choose apppropriate preprocessing.
     int ret = (cflags & REG_LITERAL)
         ? bm_compile_literal(comp, pattern, cflags)
         : bm_compile_full(comp, pattern, cflags);
     
-    /* If valid, set the relevant return field, else free the struct. */
+    // If valid, set the relevant return field, else free the struct.
     if (ret == REG_OK) {
         frec->boyer_moore = comp;
     } else {
@@ -69,24 +66,20 @@ compile_boyer_moore(frec_t *frec, string pattern, int cflags)
     return ret;
 }
 
-/*
- * Compiles the heur field of the frec struct based on the
- * given pattern with the given length.
- * Additional flags can be specified in the cflags field.
- */
+// Compiles the heur field of the frec struct based on the given pattern.
+// Additional flags can be specified in the cflags field.
 static int
-compile_heuristic(
-    frec_t *frec, string pattern, int cflags)
+compile_heuristic(frec_t *frec, string pattern, int cflags)
 {
-    heur_t *heur = frec_create_heur();
+    heur *heur = frec_create_heur();
     if (heur == NULL) {
         return (REG_ESPACE);
     }
 
-    /* Execute heuristic compilation. */
+    // Execute heuristic compilation.
     int ret = frec_preprocess_heur(heur, pattern, cflags);
     
-    /* If valid, set the relevant return field, else free the struct. */
+    // If valid, set the relevant return field, else free the struct.
     if (ret == REG_OK) {
         frec->heuristic = heur;
     } else {
@@ -97,38 +90,32 @@ compile_heuristic(
     return ret;
 }
 
-/*
- * Given a frec_t struct and a pattern with a given length, compile a
- * usual NFA struct (supplied by the underlying library), a Boyer-Moore
- * fast text searching struct, and a custom heuristic struct.
- * Additional flags may be supplied using the cflags parameter.
- * 
- * Given a newly allocated frec_t struct, this method fills all
- * its compilation-related fields.
- */
+
 int
 frec_compile(frec_t *frec, string pattern, int cflags)
 {
-    /* Compile NFA using our regex library. If we can't optimize, we
-     * can still use this original struct, and this way, we validate
-     * the pattern automatically. */
-    int ret = _dist_regwncomp(&frec->original, pattern.wide, pattern.len, cflags);
+    // Compile NFA using our regex library. If we can't optimize, we
+    // can still use this original struct, and this way, we validate
+    // the pattern automatically.
+    int ret = (pattern.is_wide)
+        ? _dist_regwncomp(&frec->original, pattern.wide, pattern.len, cflags)
+        : _dist_regncomp(&frec->original, pattern.stnd, pattern.len, cflags);
     if (ret != REG_OK) {
         return ret;
     }
 
-    /* Try and compile BM prep struct irrespective of the REG_LITERAL flag. */
+    // Try and compile BM prep struct irrespective of the REG_LITERAL flag.
     ret = compile_boyer_moore(frec, pattern, cflags);
 
-    /* A heuristic approach is only needed if the pattern is not literal. */
+    // A heuristic approach is only needed if the pattern is not literal.
     if (ret != REG_OK && !(cflags & REG_LITERAL)) {
         compile_heuristic(frec, pattern, cflags);
     } else {
         frec->heuristic = NULL;
     }
 
-    /* We save the compilation flags. At this point, at least
-     * the library-supplied NFA compilation was successful. */
+    // We save the compilation flags. At this point, at least
+    // the library-supplied NFA compilation was successful.
     frec->cflags = cflags;
     return (REG_OK);
 }
@@ -200,7 +187,7 @@ frec_mcompile(mfrec_t *mfrec, size_t k,
     wumanber->cflags = cflags;
 
     /* If the heuristic type was literal, we'll use the patterns as-is. */
-    if (mfrec->type = MHEUR_LITERAL) {
+    if (mfrec->type == MHEUR_LITERAL) {
         int ret = frec_wmcomp(wumanber, k, patterns, lens, cflags);
         if (ret != REG_OK) {
             // TODO Free mfrec, wumanber
@@ -227,8 +214,8 @@ frec_mcompile(mfrec_t *mfrec, size_t k,
                 pat_ptrs[i] = curr->boyer_moore->wide.pattern;
                 len_ptrs[i] = curr->boyer_moore->wide.len;
             } else {
-                pat_ptrs[i] = curr->heuristic->literal_prep->wide.pattern;
-                len_ptrs[i] = curr->heuristic->literal_prep->wide.len;
+                pat_ptrs[i] = curr->heuristic->literal_comp->wide.pattern;
+                len_ptrs[i] = curr->heuristic->literal_comp->wide.len;
             }
         }
 

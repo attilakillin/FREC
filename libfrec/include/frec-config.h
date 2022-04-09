@@ -1,5 +1,5 @@
-#ifndef FREC_CONFIG_H
-#define FREC_CONFIG_H 1
+#ifndef LIBFREC_CONFIG_H
+#define LIBFREC_CONFIG_H 1
 
 #include <tre/regex.h>
 

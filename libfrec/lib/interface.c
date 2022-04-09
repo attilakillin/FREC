@@ -24,42 +24,40 @@
  * SUCH DAMAGE.
  */
 
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string-type.h>
 #include <wchar.h>
+#include <string.h>
 
 #include "compile.h"
 #include "convert.h"
 #include "heuristic.h"
 #include "match.h"
 #include "frec-internal.h"
+#include "string-type.h"
 #include "wu-manber.h"
 
 int
 frec_regncomp(frec_t *preg, const char *regex, size_t len, int cflags)
 {
-	wchar_t *wregex;
-	size_t wlen;
+    string pattern;
+    string_borrow(&pattern, regex, (ssize_t) len, false);
 
-	int ret = convert_mbs_to_wcs(regex, len, &wregex, &wlen);
-	if (ret != REG_OK) {
-		return ret;
-	}
+	int ret = frec_compile(preg, pattern, cflags);
 
-	ret = frec_compile(preg, wregex, wlen, cflags);
-
-	free(wregex);
+    string_free(&pattern);
 	return ret;
 }
 
 int
 frec_regcomp(frec_t *preg, const char *regex, int cflags)
 {
-	size_t len;
+	ssize_t len;
 	if ((cflags & REG_PEND) && preg->re_endp >= regex) {
 		len = preg->re_endp - regex;
 	} else {
-		len = (regex != NULL) ? strlen(regex) : 0;
+		len = (regex != NULL) ? ((ssize_t) strlen(regex)) : 0;
 	}
 
 	return frec_regncomp(preg, regex, len, cflags);
@@ -68,17 +66,23 @@ frec_regcomp(frec_t *preg, const char *regex, int cflags)
 int
 frec_regwncomp(frec_t *preg, const wchar_t *regex, size_t len, int cflags)
 {
-	return frec_compile(preg, regex, len, cflags);
+    string pattern;
+    string_borrow(&pattern, regex, (ssize_t) len, true);
+
+    int ret = frec_compile(preg, pattern, cflags);
+
+    string_free(&pattern);
+    return ret;
 }
 
 int
 frec_regwcomp(frec_t *preg, const wchar_t *regex, int cflags)
 {
-	size_t len;
+	ssize_t len;
 	if ((cflags & REG_PEND) && preg->re_wendp >= regex) {
 		len = preg->re_wendp - regex;
 	} else {
-		len = (regex != NULL) ? wcslen(regex) : 0;
+		len = (regex != NULL) ? ((ssize_t) wcslen(regex)) : 0;
 	}
 
 	return frec_regwncomp(preg, regex, len, cflags);
@@ -87,7 +91,7 @@ frec_regwcomp(frec_t *preg, const wchar_t *regex, int cflags)
 void
 frec_regfree(frec_t *preg)
 {
-	bm_free_preproc(preg->boyer_moore);
+	bm_comp_free(preg->boyer_moore);
 	frec_free_heur(preg->heuristic);
 	_dist_regfree(&preg->original);
 }
@@ -173,14 +177,13 @@ _regexec(const void *preg, const void *str, size_t len,
 		    state.slen, state.type, state.nmatch, state.pmatch,
 		    state.eflags, state.preg);
 	else {
-		str_t *text = (type == STR_WIDE)
-			? string_create_wide(str, len)
-			: string_create_stnd(str, len);
+        string text;
+        string_borrow(&text, str, (ssize_t) len, type == STR_WIDE);
 
 		string_offset_by(text, state.offset);
 		ret = frec_match(state.pmatch, state.nmatch, state.preg, text, eflags);
 
-		string_free(text);
+		string_free(&text);
 	}
 	if (ret == REG_OK)
 		calc_offsets_post(&state);

@@ -1,13 +1,11 @@
-
 #include <wchar.h>
-
 #include "regex-parser.h"
 
-parse_result_t
-parse_wchar(regex_parser_t *parser, wchar_t c)
+parse_result
+parse_wchar(regex_parser *parser, wchar_t c)
 {
     switch (c) {
-        /* A '\' negates the escaped property. */
+        // A '\' negates the escaped property.
         case L'\\':
             if (parser->escaped) {
                 parser->escaped = false;
@@ -16,7 +14,7 @@ parse_wchar(regex_parser_t *parser, wchar_t c)
                 parser->escaped = true;
                 return SHOULD_SKIP;
             }
-        /* A '\n' can only be parsed if it isn't currently escaped. */
+        // A '\n' can only be parsed if it isn't currently escaped.
         case L'\n':
             if (parser->escaped) {
                 parser->escaped = false;
@@ -24,8 +22,8 @@ parse_wchar(regex_parser_t *parser, wchar_t c)
             } else {
                 return NORMAL_NEWLINE;
             }
-        /* These characters behave the same in both BRE and ERE:
-         * If they aren't escaped, they have special meaning. */
+        // These characters behave the same in both BRE and ERE:
+        // If they aren't escaped, they have special meaning.
         case L'.':
         case L'[':
         case L'^':
@@ -43,9 +41,9 @@ parse_wchar(regex_parser_t *parser, wchar_t c)
                     case L'*': return SPEC_ASTERISK;
                 }
             }
-        /* These have their behaviour flipped in BRE:
-         * In BRE, they only have special meaning if escaped.
-         * In ERE, they only have special meaning if not escaped. */
+        // These have their behaviour flipped in BRE:
+        // In BRE, they only have special meaning if escaped.
+        // In ERE, they only have special meaning if not escaped.
         case L'+':
         case L'?':
         case L'(':
@@ -64,8 +62,8 @@ parse_wchar(regex_parser_t *parser, wchar_t c)
                 parser->escaped = false;
                 return NORMAL_CHAR;
             }
-        /* Any other character causes an error if escaped,
-         * with the exception of a "\n" character sequence. */
+        // Any other character causes an error if escaped,
+        // except an explicit "\n" character sequence.
         default:
             if (parser->escaped) {
                 parser->escaped = false;

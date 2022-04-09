@@ -1,6 +1,5 @@
 #include <frec-config.h>
 #include <malloc.h>
-
 #include "bm-type.h"
 
 void

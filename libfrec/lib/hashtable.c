@@ -28,6 +28,7 @@
 #include <inttypes.h>
 #include <stdlib.h>
 #include <string-type.h>
+#include <string.h>
 
 #include "hashtable.h"
 
