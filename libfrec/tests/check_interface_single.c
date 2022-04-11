@@ -4,23 +4,25 @@
 
 static void
 compile_and_run(
-	frec_match_t *matches, size_t match_cnt,
-	const char *pattern, const char *text, int flags
+    frec_match_t *pmatch, size_t nmatch,
+    const char *pattern, const char *text, int flags
 ) {
 	frec_t prep;
 	int ret = frec_regcomp(&prep, pattern, flags);
 
 	ck_assert_msg(ret == REG_OK,
-		"Compilation failed: returned '%d' for pattern '%s'",
+		"regcomp failed: returned '%d' for pattern '%s'",
 		ret, pattern
 	);
 
-	ret = frec_regexec(&prep, text, match_cnt, matches, flags);
+	ret = frec_regexec(&prep, text, nmatch, pmatch, flags);
 
 	ck_assert_msg(ret == REG_OK || ret == REG_NOMATCH,
-		"Matching failed: returned '%d' for pattern '%s' and text '%s'",
+		"regexec failed: returned '%d' for pattern '%s' and text '%s'",
 		ret, pattern, text
 	);
+
+    frec_regfree(&prep);
 }
 
 

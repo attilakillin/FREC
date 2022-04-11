@@ -93,6 +93,7 @@ void
 frec_regfree(frec_t *preg)
 {
 	bm_comp_free(preg->boyer_moore);
+    free(preg->boyer_moore);
 	frec_free_heur(preg->heuristic);
 	_dist_regfree(&preg->original);
 }
@@ -201,15 +202,11 @@ frec_regnexec(const frec_t *preg, const char *str, size_t len,
 }
 
 int
-frec_regexec(const frec_t *preg, const char *str,
-    size_t nmatch, frec_match_t pmatch[], int eflags)
-{
-
-	int ret = frec_regnexec(preg, str, (size_t)-1, nmatch,
-	    pmatch, eflags);
-
-	DEBUG_PRINTF("returning %d", ret);
-	return ret;
+frec_regexec(
+    const frec_t *preg, const char *str,
+    size_t nmatch, frec_match_t pmatch[], int eflags
+) {
+	return frec_regnexec(preg, str, strlen(str), nmatch, pmatch, eflags);
 }
 
 
@@ -221,13 +218,11 @@ frec_regwnexec(const frec_t *preg, const wchar_t *str, size_t len,
 }
 
 int
-frec_regwexec(const frec_t *preg, const wchar_t *str,
-    size_t nmatch, frec_match_t pmatch[], int eflags)
-{
-	int ret = frec_regwnexec(preg, str, (size_t)-1, nmatch,
-	    pmatch, eflags);
-	DEBUG_PRINTF("returning %d", ret);
-	return ret;
+frec_regwexec(
+    const frec_t *preg, const wchar_t *str,
+    size_t nmatch, frec_match_t pmatch[], int eflags
+) {
+	return frec_regwnexec(preg, str, wcslen(str), nmatch, pmatch, eflags);
 }
 
 
