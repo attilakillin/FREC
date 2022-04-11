@@ -35,4 +35,12 @@ typedef struct regex_parser {
 parse_result
 parse_wchar(regex_parser *parser, wchar_t c);
 
+// Utility function that parses a character from a regular expression
+// pattern sequence (using the given parser state), and returns a value from
+// the parse_result enum. This value can be used to determine whether the
+// given character had a special meaning or not.
+// May return BAD_PATTERN if given an invalid pattern sequence.
+parse_result
+parse_char(regex_parser *parser, char c);
+
 #endif // FREC_REGEX_PARSER_H

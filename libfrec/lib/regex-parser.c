@@ -77,3 +77,9 @@ parse_wchar(regex_parser *parser, wchar_t c)
             }
     }
 }
+
+parse_result
+parse_char(regex_parser *parser, char c)
+{
+    return parse_wchar(parser, (wchar_t) c);
+}

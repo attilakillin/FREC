@@ -15,7 +15,7 @@ run_preprocess(const wchar_t *pattern, int flags)
     heur *prep = frec_create_heur();
     string patt;
     string_borrow(&patt, pattern, (ssize_t) wcslen(pattern), true);
-    int ret = frec_preprocess_heur(prep, patt, flags, false);
+    int ret = frec_preprocess_heur(prep, patt, flags);
 
     frec_free_heur(prep);
     return ret;
@@ -31,13 +31,12 @@ run_and_return_prep(const wchar_t *pattern, int flags)
     heur *prep = frec_create_heur();
     string patt;
     string_borrow(&patt, pattern, (ssize_t) wcslen(pattern), true);
-    int ret = frec_preprocess_heur(prep, patt, flags, false);
+    int ret = frec_preprocess_heur(prep, patt, flags);
     ck_assert_msg(ret == REG_OK,
         "Preprocessing failed: returned '%d' for pattern '%ls' with flags '%d'",
         ret, pattern, flags
     );
 
-    frec_free_heur(prep);
     return prep;
 }
 
@@ -153,6 +152,8 @@ START_TEST(loop_test_heur__successes__prefix_succeeds)
         "Preprocessing incorrectly did not create prefix heuristics: returned '%d' for pattern '%ls' with flags '%d'",
         heur->heur_type, current.pattern, current.flags
     );
+
+    frec_free_heur(heur);
 }
 END_TEST
 
@@ -173,6 +174,8 @@ START_TEST(loop_test_heur__successes__longest_succeeds)
         "Preprocessing incorrectly did not create prefix heuristics: returned '%d' for pattern '%ls' with flags '%d'",
         heur->heur_type, current.pattern, current.flags
     );
+
+    frec_free_heur(heur);
 }
 END_TEST
 

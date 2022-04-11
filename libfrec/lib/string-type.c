@@ -52,6 +52,13 @@ string_copy(string *str, const void *content, ssize_t len, bool is_wide)
     return true;
 }
 
+void
+string_reference(string *target, string src)
+{
+    void *content = ((src.is_wide) ? src.wide : src.stnd);
+    return string_borrow(target, content, src.len, src.is_wide);
+}
+
 bool
 string_duplicate(string *target, string src)
 {
@@ -110,5 +117,36 @@ string_borrow_section(string *target, string src, ssize_t start, ssize_t end)
     } else {
         target->wide = NULL;
         target->stnd = src.stnd + start;
+    }
+}
+
+void
+string_append(string *str, char stnd, wchar_t wide)
+{
+    if (str->is_wide) {
+        str->wide[str->len] = wide;
+    } else {
+        str->stnd[str->len] = stnd;
+    }
+    str->len++;
+}
+
+void
+string_append_from(string *target, string src, ssize_t at)
+{
+    if (src.is_wide) {
+        string_append(target, 'x', src.wide[at]);
+    } else {
+        string_append(target, src.stnd[at], L'x');
+    }
+}
+
+void
+string_null_terminate(string *str)
+{
+    if (str->is_wide) {
+        str->wide[str->len] = L'\0';
+    } else {
+        str->stnd[str->len] = '\0';
     }
 }

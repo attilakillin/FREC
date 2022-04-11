@@ -28,6 +28,12 @@ string_borrow(string *str, const void *content, ssize_t len, bool is_wide);
 bool
 string_copy(string *str, const void *content, ssize_t len, bool is_wide);
 
+// References the content from the given src string.
+// The underlying content is borrowed, not copied, similar to string_borrow.
+// See string_copy and string_borrow for more information.
+void
+string_reference(string *target, string src);
+
 // Duplicates the given src string into the target string.
 // The underlying content is copied, not borrowed, similar to string_copy.
 // See string_copy and string_borrow for more information.
@@ -52,5 +58,18 @@ string_offset(string *str, ssize_t offset);
 // Borrows a specific section of the src string.
 void
 string_borrow_section(string *target, string src, ssize_t start, ssize_t end);
+
+// Appends the given character to the string (with the assumption that
+// there's enough space to do so). Uses stnd or wide respectively.
+void
+string_append(string *str, char stnd, wchar_t wide);
+
+// Appends the character to target from the given index of src.
+void
+string_append_from(string *target, string src, ssize_t at);
+
+// Ensures that string is null terminated at its last position.
+void
+string_null_terminate(string *str);
 
 #endif // FREC_STRING_TYPE_H

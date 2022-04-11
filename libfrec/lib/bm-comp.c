@@ -299,26 +299,21 @@ strip_specials(string str, string *out_str, int in_flags, bm_comp *comp)
 	parser.escaped = false;
 	parser.extended = in_flags & REG_EXTENDED;
 
-	ssize_t pos = 0;
 	/* Traverse the given pattern: */
 	for (ssize_t i = 0; i < len; i++) {
-        wchar_t c;
+        parse_result result;
         if (str.is_wide) {
-            c = str.wide[i];
+            result = parse_wchar(&parser, str.wide[i]);
         } else {
-            c = (wchar_t) btowc(str.stnd[i]);
+            result = parse_char(&parser, str.stnd[i]);
         }
 
-		switch (parse_wchar(&parser, c)) {
+		switch (result) {
 			case NORMAL_CHAR:
-                (str.is_wide)
-                    ? (out_str->wide[pos++] = c)
-                    : (out_str->stnd[pos++] = str.stnd[i]);
+                string_append_from(out_str, str, i);
 				break;
 			case NORMAL_NEWLINE:
-                (str.is_wide)
-                    ? (out_str->wide[pos++] = L'\n')
-                    : (out_str->stnd[pos++] = '\n');
+                string_append(out_str, '\n', L'\n');
 				break;
 			case SHOULD_SKIP:
 				break;
@@ -329,10 +324,7 @@ strip_specials(string str, string *out_str, int in_flags, bm_comp *comp)
 	}
 
 	/* End the pattern with terminating null character and set length. */
-    (str.is_wide)
-        ? (out_str->wide[pos] = L'\0')
-        : (out_str->stnd[pos] = '\0');
-	out_str->len = pos;
+    string_null_terminate(out_str);
 
 	return (REG_OK);
 }

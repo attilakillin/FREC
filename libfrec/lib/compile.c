@@ -78,20 +78,7 @@ compile_heuristic(frec_t *frec, string pattern, int cflags)
     }
 
     // Execute heuristic compilation.
-    int ret;
-    if (pattern.is_wide) {
-        ret = frec_preprocess_heur(heur, pattern, cflags, false);
-    } else {
-        wchar_t *wide;
-        ssize_t len;
-
-        convert_mbs_to_wcs(pattern.stnd, pattern.len, &wide, &len);
-
-        string wpattern;
-        string_borrow(&wpattern, wide, len, true);
-        ret = frec_preprocess_heur(heur, wpattern, cflags, true);
-        free(wide);
-    }
+    int ret = frec_preprocess_heur(heur, pattern, cflags);
     
     // If valid, set the relevant return field, else free the struct.
     if (ret == REG_OK) {

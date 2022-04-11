@@ -1,121 +1,128 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <wchar.h>
 #include <frec-config.h>
-#include "convert.h"
 #include "heuristic.h"
 #include "regex-parser.h"
+#include "string-type.h"
 
+typedef struct heur_parser {
+    string *fragments;
+    ssize_t frag_index;
 
-typedef struct {
-    wchar_t **fragments;
-    ssize_t *fragment_lens;
-    ssize_t next_index;
+    ssize_t max_length;
+    bool length_known;
 
     bool reg_newline_set;
-    bool may_contain_lf;
+    bool may_match_lf;
     bool has_literal_prefix;
 } heur_parser;
 
-static heur_parser *
-create_heur_parser(int cflags)
+// Utility function.
+static ssize_t max(ssize_t a, ssize_t b) { return (a > b) ? a : b; }
+
+// Utility function. Asserts that str[at] equals stnd or wide in the correct
+// sub-array.
+static bool
+string_has_char_at(string str, ssize_t at, char stnd, wchar_t wide)
 {
-    heur_parser *parser = malloc(sizeof(heur_parser));
-    if (parser == NULL) {
-        return NULL;
+    if (str.is_wide) {
+        return str.wide[at] == wide;
+    } else {
+        return str.stnd[at] == stnd;
     }
+}
 
-    parser->fragments = malloc(sizeof(wchar_t *) * MAX_FRAGMENTS);
+// Initialize the heuristic parser.
+static bool
+heur_parser_init(heur_parser *parser, int cflags)
+{
+    // Allocate memory for enough strings.
+    parser->fragments = malloc(sizeof(string) * MAX_FRAGMENTS);
     if (parser->fragments == NULL) {
-        free(parser);
-        return NULL;
+        return false;
     }
 
-    parser->fragment_lens = malloc(sizeof(size_t) * MAX_FRAGMENTS);
-    if (parser->fragment_lens == NULL) {
-        free(parser->fragments);
-        free(parser);
-        return NULL;
-    }
-    
-    parser->next_index = 0;
+    // Set fragment index and max length information.
+    parser->frag_index = 0;
+    parser->max_length = 0;
+    parser->length_known = true;
 
+    // And set the remaining flags.
     parser->reg_newline_set = cflags & REG_NEWLINE;
-    parser->may_contain_lf = false;
+    parser->may_match_lf = false;
     parser->has_literal_prefix = true;
 
-    return parser;
+    return true;
 }
 
+// Free the heuristic parser.
 static void
-free_heur_parser(heur_parser *parser)
+heur_parser_free(heur_parser *parser)
 {
     if (parser != NULL) {
+        // Free every currently occupied string.
         if (parser->fragments != NULL) {
-            for (size_t i = 0; i < parser->next_index; i++) {
-                if (parser->fragments[i] != NULL) {
-                    free(parser->fragments[i]);
-                }
+            for (ssize_t i = 0; i < parser->frag_index; i++) {
+                string_free(&parser->fragments[i]);
             }
-            free(parser->fragments);
         }
-        if (parser->fragment_lens != NULL) {
-            free(parser->fragment_lens);
-        }
-        free(parser);
+
+        // Then free the array itself too.
+        free(parser->fragments);
     }
 }
 
+// Push a fragment to the storage of parser.
+// This method creates a deep copy of fragment.
 static int
-end_segment(heur_parser *state, wchar_t *fragment, size_t pos)
+heur_parser_push(heur_parser *parser, string fragment)
 {
-    if (pos == 0) {
-        if (state->next_index == 0) {
-            state->has_literal_prefix = false;
+    // If the fragment's length is zero, return early.
+    if (fragment.len == 0) {
+        // If the first fragment had zero length, then the prefix isn't literal.
+        if (parser->frag_index == 0) {
+            parser->has_literal_prefix = false;
         }
-
         return (REG_OK);
     }
 
-    if (state->next_index >= MAX_FRAGMENTS) {
+    // If we used up too many fragments, return an error.
+    if (parser->frag_index >= MAX_FRAGMENTS) {
         return (REG_BADPAT);
     }
 
-    /* Store the pointed fragment in storage. */
-    wchar_t *storage = malloc(sizeof(wchar_t) * (pos + 1));
-    if (storage == NULL) {
+    // Duplicate the given fragment and write it to the fragment array.
+    string *write_ptr = &parser->fragments[parser->frag_index];
+    bool success = string_duplicate(write_ptr, fragment);
+    if (!success) {
         return (REG_ESPACE);
     }
 
-    memcpy(storage, fragment, sizeof(wchar_t) * pos);
-    storage[pos] = L'\0';
-
-    state->fragments[state->next_index] = storage;
-    state->fragment_lens[state->next_index] = pos;
-    state->next_index++;
-
+    parser->frag_index++;
     return (REG_OK);
 }
 
+// Handle an opening square bracket in the pattern at the given iter
+// position.
 static int
-handle_square_bracket(
-    heur_parser *state, const wchar_t *pattern, size_t len, size_t *iter)
+handle_square_bracket(heur_parser *parser, string pattern, ssize_t *iter)
 {
-    size_t pos = *iter + 1;
+    ssize_t pos = *iter + 1;
 
-    if (pos < len && pattern[pos] == L'^') {
-        state->may_contain_lf = true;
+    // Check whether the contents are negated (which may match linefeeds).
+    if (pos < pattern.len && string_has_char_at(pattern, pos, '^', L'^')) {
+        parser->may_match_lf = true;
         pos++;
     }
 
-    while(pos < len) {
-        wchar_t c = pattern[pos];
-        if (c == L'[') {
+    // And then advance up to the closing bracket.
+    while(pos < pattern.len) {
+        if (string_has_char_at(pattern, pos, '[', L'[')) {
             return (REG_BADPAT);
-        } else if (c == L'\n') {
-            state->may_contain_lf = true;
-        } else if (c == L']') {
+        } else if (string_has_char_at(pattern, pos, '\n', L'\n')) {
+            parser->may_match_lf = true;
+        } else if (string_has_char_at(pattern, pos, ']', L']')) {
             break;
         }
         pos++;
@@ -125,76 +132,100 @@ handle_square_bracket(
     return (REG_OK);
 }
 
+// Handle an enclosure marked by the op and cl characters as the opening
+// and closing characters respectively. Use a wrapper function instead!
 static int
 handle_enclosure(
-    heur_parser *state, const wchar_t *pattern, size_t len, size_t *iter,
-    wchar_t opening, wchar_t closing)
-{
-    size_t pos = *iter;
+    heur_parser *parser, string pattern, ssize_t *iter,
+    char stnd_op, char stnd_cl, wchar_t wide_op, wchar_t wide_cl
+) {
+    ssize_t pos = *iter;
 
     int depth = 0;
 
-    while (pos < len) {
-        wchar_t c = pattern[pos];
-        if (c == opening) {
+    // While there's chars to read.
+    while (pos < pattern.len) {
+        if (string_has_char_at(pattern, pos, stnd_op, wide_op)) {
+            // Increase depth on an opening character.
             depth++;
-        } else if (c == closing) {
+        } else if (string_has_char_at(pattern, pos, stnd_cl, wide_cl)) {
+            // Decrease it on a closing one.
             depth--;
-        } else if (c == L'.' || c == L'\n') {
-            state->may_contain_lf = true;
+        } else if (
+            string_has_char_at(pattern, pos, '.', L'.')
+            || string_has_char_at(pattern, pos, '\n', L'\n')
+        ) {
+            // And mark that linefeeds can be matched on a '.' or a '\n'.
+            parser->may_match_lf = true;
         }
-        
+
+        // If the current depth is 0, break, otherwise advance.
         if (depth == 0) {
             break;
         }
         pos++;
     }
 
+    // If depth is not 0, the opening character was not closed.
+    if (depth != 0) {
+        return (REG_BADPAT);
+    }
+
     *iter = pos;
     return (REG_OK);
 }
 
+// Wrapper for handle_enclosure.
 static int
-build_bm_from_best_fragment(heur_parser *state, heur *target, bool return_stnd)
+handle_curlybraces(heur_parser *parser, string pattern, ssize_t *iter)
 {
-    if (target->max_length > 0 || state->reg_newline_set || !state->may_contain_lf) {
-        target->heur_type = HEUR_LONGEST;
-    } else if (state->has_literal_prefix) {
-        target->heur_type = HEUR_PREFIX;
+    return handle_enclosure(parser, pattern, iter, '{', '}', L'{', L'}');
+}
+
+// Wrapper for handle_enclosure.
+static int
+handle_parentheses(heur_parser *parser, string pattern, ssize_t *iter)
+{
+    return handle_enclosure(parser, pattern, iter, '(', ')', L'(', L')');
+}
+
+// Build final heuristic output from the given parser.
+static int
+build_heuristic(heur *heuristic, heur_parser parser)
+{
+    // Set the maximum length.
+    heuristic->max_length = (parser.length_known) ? (parser.max_length) : (-1);
+
+    // Set heuristic type.
+    if (parser.length_known || parser.reg_newline_set || !parser.may_match_lf) {
+        heuristic->heur_type = HEUR_LONGEST;
+    } else if (parser.has_literal_prefix) {
+        heuristic->heur_type = HEUR_PREFIX;
     } else {
+        // We can't use either one of the above heuristics, return early.
         return (REG_BADPAT);
     }
 
-    wchar_t *pattern;
-    ssize_t len;
+    string best_pattern;
 
-    if (target->heur_type == HEUR_PREFIX) {
-        pattern = state->fragments[0];
-        len = state->fragment_lens[0];
+    if (heuristic->heur_type == HEUR_PREFIX) {
+        // If prefix heuristics is used, we'll use the first fragment.
+        string_reference(&best_pattern, parser.fragments[0]);
     } else {
+        // Otherwise, we find the longest fragment.
         size_t i = 0;
-        for (size_t j = 1; j < state->next_index; j++) {
-            if (state->fragment_lens[j] > state->fragment_lens[i]) {
+        for (size_t j = 1; j < parser.frag_index; j++) {
+            if (parser.fragments[j].len > parser.fragments[i].len) {
                 i = j;
             }
         }
 
-        pattern = state->fragments[i];
-        len = state->fragment_lens[i];
+        // And use that.
+        string_reference(&best_pattern, parser.fragments[i]);
     }
 
-    string patt_to_use;
-    char *stnd = NULL;
-    if (return_stnd) {
-        ssize_t stnd_len;
-        convert_wcs_to_mbs(pattern, len, &stnd, &stnd_len);
-        string_borrow(&patt_to_use, stnd, stnd_len, false);
-    } else {
-        string_borrow(&patt_to_use, pattern, len, true);
-    }
-
-    int ret = bm_compile_literal(&target->literal_comp, patt_to_use, 0);
-    free(stnd);
+    // Compile final Boyer-Moore literal field.
+    int ret = bm_compile_literal(&heuristic->literal_comp, best_pattern, 0);
     return ret;
 }
 
@@ -206,134 +237,144 @@ build_bm_from_best_fragment(heur_parser *state, heur *target, bool return_stnd)
  * May return REG_BADPAT or REG_ESPACE on failure.
  */
 int
-frec_preprocess_heur(heur *heur, string wpattern, int cflags, bool return_stnd)
+frec_preprocess_heur(heur *heuristic, string pattern, int cflags)
 {
-    /* Initialize heuristic parser state. */
-    heur_parser *state = create_heur_parser(cflags);
-    if (state == NULL) {
+    // Initialize heuristic parser.
+    heur_parser parser;
+    bool success = heur_parser_init(&parser, cflags);
+    if (!success) {
         return (REG_ESPACE);
     }
 
-    long max_length = 0;
-    bool variable_len = false;
-
-    wchar_t *pattern = wpattern.wide;
-    ssize_t len = wpattern.len;
-
-    /* These will store the current fragment and its length. */
-    wchar_t *cfragment = malloc(sizeof(wchar_t) * len);
-    if (cfragment == NULL) {
-        free_heur_parser(state);
+    // This fragment will be the one we modify. Its length is set to 0
+    // so that it can be filled with the parsed characters.
+    string fragment;
+    success = string_duplicate(&fragment, pattern);
+    if (!success) {
+        heur_parser_free(&parser);
         return (REG_ESPACE);
     }
-    size_t cpos = 0;
+    fragment.len = 0;
 
     /* Initialize regex parser. */
-    regex_parser parser;
-    parser.escaped = false;
-    parser.extended = cflags & REG_EXTENDED;
+    regex_parser reg_parser;
+    reg_parser.escaped = false;
+    reg_parser.extended = cflags & REG_EXTENDED;
 
     int ret = REG_OK;
-    for (size_t i = 0; i < len; i++) {
-        /* Parse each character. */
-        wchar_t c = pattern[i];
-        parse_result result = parse_wchar(&parser, c);
+    for (ssize_t i = 0; i < pattern.len; i++) {
+        // Parse each character.
+        parse_result result;
+        if (pattern.is_wide) {
+            result = parse_wchar(&reg_parser, pattern.wide[i]);
+        } else {
+            result = parse_char(&reg_parser, pattern.stnd[i]);
+        }
 
-        /* Execute preliminary actions. */
+        // Execute preliminary actions.
         switch (result) {
-            /* Save a normal character or a newline. */
+            // Save a normal character or a newline.
             case NORMAL_CHAR:
-                cfragment[cpos++] = c;
-                max_length++;
+                string_append_from(&fragment, pattern, i);
+                parser.max_length++;
                 break;
             case NORMAL_NEWLINE:
-                cfragment[cpos++] = L'\n';
-                max_length++;
-                state->may_contain_lf = true;
+                string_append(&fragment, '\n', L'\n');
+                parser.max_length++;
+                parser.may_match_lf = true;
                 break;
-            /* Skip when we should skip any action. */
+            // Skip when we should skip any action.
             case SHOULD_SKIP:
                 break;
-            /* In case of a bad pattern or a | char (unsupported), return. */
+            // In case of a bad pattern or a | char (unsupported),
+            // signal an error (handled below the switch).
             case BAD_PATTERN:
             case SPEC_PIPE:
-                free(cfragment);
-                free_heur_parser(state);
-                return (REG_BADPAT);
-            /* The special characters make the last literal char optional. */
+                ret = (REG_BADPAT);
+                break;
+            // These special characters make the last literal char optional.
             case SPEC_CURLYBRACE:
             case SPEC_ASTERISK:
             case SPEC_QMARK:
-                cpos = (cpos <= 0) ? (0) : (cpos - 1);
-            /* The above and these others make the pattern variable length. */
+                fragment.len = max(0, fragment.len - 1);
+            // The above and these others make the pattern variable length.
             case SPEC_PLUS:
             case SPEC_PAREN:
-                variable_len = true;
-            /* In the above cases and for any other special character,
-            * we need to end the current literal segment. */
+                parser.length_known = false;
+            // In the above cases and for any other special character,
+            // we need to end the current literal segment.
             default:
-                ret = end_segment(state, cfragment, cpos);
-                if (ret != REG_OK) {
-                    free(cfragment);
-                    free_heur_parser(state);
-                    return ret;
-                }
-                cpos = 0;
+                string_null_terminate(&fragment);
+                // Return failures are handled below the switch.
+                ret = heur_parser_push(&parser, fragment);
+                // Reset fragment position for the next fragment.
+                fragment.len = 0;
                 break;
         }
 
-        /* Execute extra actions. For a few special characters, we need to
-         * do extra work before continuing on to the next character. */
+        if (ret != REG_OK) {
+            string_free(&fragment);
+            heur_parser_free(&parser);
+            return ret;
+        }
+
+        // Execute extra actions. For a few special characters, we need to
+        // do extra work after finishing the segment.
         switch (result) {
-            /* A . any character operator may include line feeds. */
+            // A . any character operator may include line feeds, and also
+            // modifies the maximum length.
             case SPEC_DOT:
-                state->may_contain_lf = true;
-                max_length++;
+                parser.may_match_lf = true;
+                parser.max_length++;
                 break;
-            /* On a [ character, we need to advance our iterator. */
+            /* On a '[' character, we need to advance our iterator. */
             case SPEC_BRACKET:
-                ret = handle_square_bracket(state, pattern, len, &i);
-                max_length++;
+                ret = handle_square_bracket(&parser, pattern, &i);
+                parser.max_length++;
                 break;
-            /* On a ( or a { we advance too, but with a different logic. */
+            /* On a '(' or a '{' we advance too, but with a different logic. */
             case SPEC_PAREN:
-                ret = handle_enclosure(state, pattern, len, &i, L'(', L')');
+                ret = handle_parentheses(&parser, pattern, &i);
                 break;
             case SPEC_CURLYBRACE:
-                ret = handle_enclosure(state, pattern, len, &i, L'{', L'}');
+                ret = handle_curlybraces(&parser, pattern, &i);
                 break;
             default:
                 break;
         }
 
-        /* If any of the extra actions failed, we return. */
+        // If any of the extra actions failed, we return.
         if (ret != REG_OK) {
-            free(cfragment);
-            free_heur_parser(state);
+            string_free(&fragment);
+            heur_parser_free(&parser);
             return ret;
         }
     }
 
-    /* If the last segment was not finished, we finish it. */
-    if (cpos > 0) {
-        ret = end_segment(state, cfragment, cpos);
+    // We exited the loop, which means we read the whole pattern.
+    // If the last segment was not finished, we finish it.
+    if (fragment.len > 0) {
+        string_null_terminate(&fragment);
+        ret = heur_parser_push(&parser, fragment);
         if (ret != REG_OK) {
-            free(cfragment);
-            free_heur_parser(state);
+            string_free(&fragment);
+            heur_parser_free(&parser);
             return ret;
         }
     }
 
-    heur->max_length = (variable_len) ? (-1) : (max_length);
+    // Initialize and fill Boyer-Moore compilation data for the best fragment.
+    bm_comp_init(&heuristic->literal_comp, cflags);
+    ret = build_heuristic(heuristic, parser);
 
-    bm_comp_init(&heur->literal_comp, cflags);
-    ret = build_bm_from_best_fragment(state, heur, return_stnd);
+    // Free Boyer-Moore data if compilation failed.
     if (ret != REG_OK) {
-        bm_comp_free(&heur->literal_comp);
+        bm_comp_free(&heuristic->literal_comp);
     }
 
-    free(cfragment);
-    free_heur_parser(state);
+    // And free the temporary fragment, as well as the heuristic parser.
+    string_free(&fragment);
+    heur_parser_free(&parser);
     return ret;
 }
 
