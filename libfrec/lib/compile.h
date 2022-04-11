@@ -1,7 +1,6 @@
 #ifndef FREC_COMPILE_H
 #define FREC_COMPILE_H
 
-#include <wchar.h>
 #include "frec-internal.h"
 #include "string-type.h"
 
@@ -15,6 +14,6 @@
 int frec_compile(frec_t *frec, string pattern, int cflags);
 
 
-int frec_mcompile(mfrec_t *mfrec, size_t k, const string *patterns, int cflags);
+//int frec_mcompile(mfrec_t *mfrec, size_t k, const string *patterns, int cflags);
 
 #endif

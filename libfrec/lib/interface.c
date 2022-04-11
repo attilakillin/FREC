@@ -30,6 +30,7 @@
 #include <wchar.h>
 #include <string.h>
 
+#include "bm-type.h"
 #include "compile.h"
 #include "convert.h"
 #include "heuristic.h"
@@ -152,8 +153,8 @@ inline static void calc_offsets_post(regexec_state *state)
 
 	if ((state->eflags & REG_STARTEND) && !(state->cflags & REG_NOSUB))
 		for (size_t i = 0; i < state->nmatch; i++) {
-			state->pmatch[i].soffset += state->offset;
-			state->pmatch[i].soffset += state->offset;
+			state->pmatch[i].soffset += (ssize_t) state->offset;
+			state->pmatch[i].soffset += (ssize_t) state->offset;
 			DEBUG_PRINTF("pmatch[%zu] offsets %d - %d", i,
 			    state->pmatch[i].soffset, state->pmatch[i].soffset);
 		}
@@ -170,7 +171,7 @@ _regexec(const void *preg, const void *str, size_t len,
 
 	init_state(&state, preg, str, len, nmatch, pmatch, cflags, eflags, type);
 	calc_offsets_pre(&state);
-	if ((state.eflags & REG_STARTEND) && (state.pmatch[0].soffset > state.pmatch[0].soffset))
+	if ((state.eflags & REG_STARTEND) && (state.pmatch[0].soffset > state.pmatch[0].eoffset))
 		return (REG_NOMATCH);
 	if (multi)
 		ret = oldfrec_mmatch(&((const wchar_t *)state.str)[state.offset],
@@ -179,8 +180,7 @@ _regexec(const void *preg, const void *str, size_t len,
 	else {
         string text;
         string_borrow(&text, str, (ssize_t) len, type == STR_WIDE);
-
-		string_offset_by(text, state.offset);
+        string_offset(&text, (ssize_t) state.offset);
 		ret = frec_match(state.pmatch, state.nmatch, state.preg, text, eflags);
 
 		string_free(&text);
@@ -260,7 +260,7 @@ frec_mregncomp(mfrec_t *preg, size_t nr, const char **regex,
 	}
 
 	wr = (const wchar_t **)wregex;
-	ret = frec_mcompile(preg, nr, wr, wlen, cflags);
+	//ret = frec_mcompile(preg, nr, wr, wlen, cflags);
 
 err:
 	if (wregex) {
@@ -326,7 +326,7 @@ frec_mregwncomp(mfrec_t *preg, size_t nr, const wchar_t **regex,
 	}
 
 	sr = (const char **)sregex;
-	ret = frec_mcompile(preg, nr, regex, n, cflags);
+	//ret = frec_mcompile(preg, nr, regex, n, cflags);
 
 err:
 	if (sregex) {

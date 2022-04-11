@@ -27,7 +27,6 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <stdlib.h>
-#include <string-type.h>
 #include <string.h>
 
 #include "hashtable.h"
@@ -91,7 +90,8 @@ hashtable_init(size_t table_size, size_t key_size, size_t value_size)
 int
 hashtable_put(hashtable *tbl, const void *key, const void *value)
 {
-	uint32_t hash = hash32_buf(key, tbl->key_size, hash) % tbl->tbl_size;
+    uint32_t hash = 0;
+	hash = hash32_buf(key, tbl->key_size, hash) % tbl->tbl_size;
 	uint32_t initial_hash = hash;
 
 	/* On hash collision entries are inserted at the next free space. */
@@ -144,7 +144,8 @@ hashtable_put(hashtable *tbl, const void *key, const void *value)
 static hashtable_entry **
 hashtable_lookup(const hashtable *tbl, const void *key)
 {
-	uint32_t hash = hash32_buf(key, tbl->key_size, hash) % tbl->tbl_size;
+    uint32_t hash = 0;
+	hash = hash32_buf(key, tbl->key_size, hash) % tbl->tbl_size;
 	uint32_t initial_hash = hash;
 
 	while (tbl->entries[hash] != NULL) {
@@ -173,11 +174,11 @@ int
 hashtable_get(hashtable *tbl, const void *key, void *value)
 {
 	hashtable_entry **entry_ptr = hashtable_lookup(tbl, key);
-	hashtable_entry *entry = *entry_ptr;
-
-	if (entry == NULL) {
+	if (entry_ptr == NULL) {
 		return (HASH_NOTFOUND);
 	}
+
+    hashtable_entry *entry = *entry_ptr;
 
 	memcpy(value, entry->value, tbl->val_size);
 	return (HASH_OK);
@@ -192,11 +193,11 @@ int
 hashtable_remove(hashtable *tbl, const void *key)
 {
 	hashtable_entry **entry_ptr = hashtable_lookup(tbl, key);
-	hashtable_entry *entry = *entry_ptr;
-
-	if (entry == NULL) {
+	if (entry_ptr == NULL) {
 		return (HASH_NOTFOUND);
 	}
+
+    hashtable_entry *entry = *entry_ptr;
 
 	free(entry->key);
 	free(entry->value);

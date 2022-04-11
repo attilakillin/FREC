@@ -5,7 +5,9 @@
 void
 bm_comp_init(bm_comp *comp, int cflags)
 {
+    string_init(&comp->pattern);
     comp->good_shifts = NULL;
+
     comp->bad_shifts_wide = NULL;
 
     comp->has_bol_anchor = false;
@@ -17,14 +19,12 @@ bm_comp_init(bm_comp *comp, int cflags)
     comp->is_nline_set = cflags & REG_NEWLINE;
 }
 
-// Frees the resources associated with the given BM compilation struct.
-// Does not free the struct itself.
 void
-bm_free_comp(bm_comp *comp)
+bm_comp_free(bm_comp *comp)
 {
     if (comp != NULL) {
         string_free(&comp->pattern);
         free(comp->good_shifts);
-        free(comp->bad_shifts_wide);
+        hashtable_free(comp->bad_shifts_wide);
     }
 }

@@ -88,7 +88,8 @@ fill_badc_shifts_wide(bm_comp *comp)
 	wchar_t *pattern = comp->pattern.wide;
 	ssize_t len = comp->pattern.len;
 
-	hashtable *table = hashtable_init(len * 8, sizeof(wchar_t), sizeof(int));
+	hashtable *table =
+        hashtable_init(len * 8, sizeof(wchar_t), sizeof(unsigned int));
 	comp->bad_shifts_wide = table;
 
 	// If initialization fails, return early.
@@ -120,12 +121,12 @@ fill_badc_shifts_wide(bm_comp *comp)
 
 // Fills the good suffix table for the given pattern.
 static int
-calculate_good_shifts(uint *table, string *pattern)
+calculate_good_shifts(unsigned int *table, string *pattern)
 {
     ssize_t len = pattern->len;
 
 	// Calculate suffixes (as per the specification of the BM algorithm).
-	ssize_t *suff = malloc(sizeof(ssize_t) * pattern->len);
+	ssize_t *suff = malloc(sizeof(ssize_t) * len);
 	if (suff == NULL) {
 		return (REG_ESPACE);
 	}
@@ -212,7 +213,7 @@ fill_good_shifts(bm_comp *comp)
 	}
 
     // Initialize good_shifts attribute.
-    comp->good_shifts = malloc(sizeof(int) * pattern->len);
+    comp->good_shifts = malloc(sizeof(unsigned int) * pattern->len);
     if (comp->good_shifts == NULL) {
         if (comp->is_icase_set) {
             string_free(pattern);
@@ -275,10 +276,8 @@ bm_compile_literal(bm_comp *comp, string patt, int cflags)
 // Input flags can be specified in in_flags, while output flags are set in the
 // given comp compilation struct.
 static int
-strip_specials(
-    string str, string *out_str,
-    int in_flags, bm_comp *comp
-) {
+strip_specials(string str, string *out_str, int in_flags, bm_comp *comp)
+{
 	ssize_t len = str.len;
 
 	/* If the first character is ^, set the given flag and continue. */
@@ -313,13 +312,13 @@ strip_specials(
 		switch (parse_wchar(&parser, c)) {
 			case NORMAL_CHAR:
                 (str.is_wide)
-                    ? (str.wide[pos++] = c)
-                    : (str.stnd[pos++] = str.stnd[i]);
+                    ? (out_str->wide[pos++] = c)
+                    : (out_str->stnd[pos++] = str.stnd[i]);
 				break;
 			case NORMAL_NEWLINE:
                 (str.is_wide)
-                    ? (str.wide[pos++] = L'\n')
-                    : (str.stnd[pos++] = '\n');
+                    ? (out_str->wide[pos++] = L'\n')
+                    : (out_str->stnd[pos++] = '\n');
 				break;
 			case SHOULD_SKIP:
 				break;

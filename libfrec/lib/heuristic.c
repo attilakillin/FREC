@@ -1,8 +1,8 @@
+
 #include <stdlib.h>
-#include <string-type.h>
+#include <string.h>
 #include <wchar.h>
 #include <frec-config.h>
-#include <string.h>
 #include "convert.h"
 #include "heuristic.h"
 #include "regex-parser.h"
@@ -10,8 +10,8 @@
 
 typedef struct {
     wchar_t **fragments;
-    size_t *fragment_lens;
-    size_t next_index;
+    ssize_t *fragment_lens;
+    ssize_t next_index;
 
     bool reg_newline_set;
     bool may_contain_lf;
@@ -155,7 +155,7 @@ handle_enclosure(
 }
 
 static int
-build_bm_from_best_fragment(heur_parser *state, heur *target)
+build_bm_from_best_fragment(heur_parser *state, heur *target, bool return_stnd)
 {
     if (target->max_length > 0 || state->reg_newline_set || !state->may_contain_lf) {
         target->heur_type = HEUR_LONGEST;
@@ -166,7 +166,7 @@ build_bm_from_best_fragment(heur_parser *state, heur *target)
     }
 
     wchar_t *pattern;
-    size_t len;
+    ssize_t len;
 
     if (target->heur_type == HEUR_PREFIX) {
         pattern = state->fragments[0];
@@ -183,7 +183,19 @@ build_bm_from_best_fragment(heur_parser *state, heur *target)
         len = state->fragment_lens[i];
     }
 
-    return bm_preprocess_literal(target->literal_comp, pattern, len, 0);
+    string patt_to_use;
+    char *stnd = NULL;
+    if (return_stnd) {
+        ssize_t stnd_len;
+        convert_wcs_to_mbs(pattern, len, &stnd, &stnd_len);
+        string_borrow(&patt_to_use, stnd, stnd_len, false);
+    } else {
+        string_borrow(&patt_to_use, pattern, len, true);
+    }
+
+    int ret = bm_compile_literal(&target->literal_comp, patt_to_use, 0);
+    free(stnd);
+    return ret;
 }
 
 /*
@@ -194,7 +206,7 @@ build_bm_from_best_fragment(heur_parser *state, heur *target)
  * May return REG_BADPAT or REG_ESPACE on failure.
  */
 int
-frec_preprocess_heur(heur *heuristic, string _pattern, int cflags)
+frec_preprocess_heur(heur *heur, string wpattern, int cflags, bool return_stnd)
 {
     /* Initialize heuristic parser state. */
     heur_parser *state = create_heur_parser(cflags);
@@ -205,14 +217,8 @@ frec_preprocess_heur(heur *heuristic, string _pattern, int cflags)
     long max_length = 0;
     bool variable_len = false;
 
-    wchar_t *pattern;
-    ssize_t len;
-    if (_pattern.is_wide) {
-        pattern = _pattern.wide;
-        len = _pattern.len;
-    } else {
-        convert_mbs_to_wcs(_pattern.stnd, _pattern.len, &pattern, &len);
-    }
+    wchar_t *pattern = wpattern.wide;
+    ssize_t len = wpattern.len;
 
     /* These will store the current fragment and its length. */
     wchar_t *cfragment = malloc(sizeof(wchar_t) * len);
@@ -318,12 +324,12 @@ frec_preprocess_heur(heur *heuristic, string _pattern, int cflags)
         }
     }
 
-    bm_comp_init(&heuristic->literal_comp, cflags);
-
     heur->max_length = (variable_len) ? (-1) : (max_length);
-    ret = build_bm_from_best_fragment(state, heur);
+
+    bm_comp_init(&heur->literal_comp, cflags);
+    ret = build_bm_from_best_fragment(state, heur, return_stnd);
     if (ret != REG_OK) {
-        bm_free_preproc(heur->literal_comp);
+        bm_comp_free(&heur->literal_comp);
     }
 
     free(cfragment);
@@ -331,21 +337,22 @@ frec_preprocess_heur(heur *heuristic, string _pattern, int cflags)
     return ret;
 }
 
-heur *frec_create_heur()
+heur *
+frec_create_heur()
 {
-    heur *heur = malloc(sizeof(heur));
-    if (heur == NULL) {
+    heur *heuristic = malloc(sizeof(heur));
+    if (heuristic == NULL) {
         return NULL;
     }
 
-    return heur;
+    return heuristic;
 }
 
 void
-frec_free_heur(heur *heur)
+frec_free_heur(heur *heuristic)
 {
-    if (heur != NULL) {
-        bm_comp_free(heur->literal_comp);
-        free(heur);
+    if (heuristic != NULL) {
+        bm_comp_free(&heuristic->literal_comp);
+        free(heuristic);
     }
 }

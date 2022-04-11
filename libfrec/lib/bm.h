@@ -18,10 +18,10 @@ int
 bm_compile_full(bm_comp *comp, string patt, int cflags);
 
 // Given a comp precompiled Boyer-Moore struct, a text, and given execution
-// flags, find the first match and store its submatches in the result array.
-// An nmatch of 0, a result pointer of NULL, or an is_nosub_set in comp means
-// the result will not be substituted into result.
+// flags, find the first match and store its start and end in result.
+// A result pointer of NULL, or an is_nosub_set in comp means the result will
+// not be substituted into result.
 int
-bm_execute(frec_match_t result[], size_t nmatch, bm_comp *comp, string text, int eflags);
+bm_execute(frec_match_t *result, const bm_comp *comp, string text, int eflags);
 
 #endif // FREC_BM_H

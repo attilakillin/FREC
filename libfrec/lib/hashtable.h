@@ -13,13 +13,13 @@
 
 #define HASHSTEP(x, c) (((x << 5) + x) + (c))
 
-typedef struct
+typedef struct hashtable_entry
 {
 	void *key;                  /* Pointer to an entry key. */
 	void *value;                /* Pointer to an entry value. */
 } hashtable_entry;
 
-typedef struct
+typedef struct hashtable
 {
 	size_t tbl_size;            /* Max entry count of the table. */
 	size_t key_size;            /* Size of an entry key. */

@@ -19,6 +19,7 @@ typedef struct heur {
 heur *frec_create_heur();
 void frec_free_heur(heur *h);
 
-int frec_preprocess_heur(heur *heur, string pattern, int cflags);
+int
+frec_preprocess_heur(heur *heur, string wpattern, int cflags, bool return_stnd);
 
 #endif

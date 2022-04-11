@@ -27,6 +27,7 @@
 #include <frec-config.h>
 #include <string-type.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "bm.h"
 
@@ -34,254 +35,162 @@
 static ssize_t max(ssize_t a, ssize_t b) { return (a > b) ? a : b; }
 static ssize_t min(ssize_t a, ssize_t b) { return (a < b) ? a : b; }
 
-/*
- * Returns whether the character before the given position is a
- * beginning-of-line character. Standard character version.
- */
-static bool bol_matches_stnd(const char *text, size_t start_pos) {
-    return start_pos == 0 || text[start_pos - 1] == '\n';
-}
-/*
- * Returns whether the character before the given position is a
- * beginning-of-line character. Wide character version.
- */
-static bool bol_matches_wide(const wchar_t *text, size_t start_pos) {
-    return start_pos == 0 || text[start_pos - 1] == L'\n';
+// Utility function. Asserts that str[at] equals stnd or wide in the correct
+// sub-array.
+static bool
+string_has_newline_at(string str, ssize_t at)
+{
+    if (str.is_wide) {
+        return str.wide[at] == L'\n';
+    } else {
+        return str.stnd[at] == '\n';
+    }
 }
 
-/*
- * Returns whether the character at the given position is an
- * end-of-line character. Standard character version.
- */
-static bool eol_matches_stnd(const char *text, size_t text_len, size_t end_pos) {
-    return end_pos == text_len || text[end_pos] == '\n';
-}
-/*
- * Returns whether the character at the given position is an
- * end-of-line character. Wide character version.
- */
-static bool eol_matches_wide(const wchar_t *text, size_t text_len, size_t end_pos) {
-    return end_pos == text_len || text[end_pos] == L'\n';
+// Assert that str1[pos1] equals str2[pos2].
+static bool
+compare_strings_at(string str1, ssize_t pos1, string str2, ssize_t pos2)
+{
+    if (str1.is_wide) {
+        return str1.wide[pos1] == str2.wide[pos2];
+    } else {
+        return str1.stnd[pos1] == str2.stnd[pos2];
+    }
 }
 
 // TODO Not properly configured for case ignoring
 
-/*
- * Executes the turbo Boyer-Moore algorithm on the given text with the given
- * length, and stores at most nmatch number of results in the given result
- * array. Will not store matches if that flag is set.
- * Private method, called by bm_execute_stnd.
- */
+// Executes the turbo Boyer-Moore algorithm on the given text with the given
+// length, and stores the result.
+// Will not store the match if the respective flag is set.
 static int
-exec_turbo_bm_stnd(
-    frec_match_t result[], size_t nmatch,
-    bm_comp *comp, const char *text, ssize_t _len,
-    bool store_matches)
-{
-    ssize_t res_cnt = 0; /* A new match will be written to this index of result. */
-
-    ssize_t len = _len; /* Because it's important that this is signed. */
-    ssize_t srch_pos = 0; /* The current start pos in the text of our search. */
-    ssize_t pat_len = comp->pattern.len; /* The length of the pattern. */
-    unsigned int *good_shs = comp->good_shifts;
-    unsigned int *badc_shs = comp->bad_shifts_stnd;
-
-    ssize_t shift = pat_len; /* This variable is used to shift srch_pos. */
-    ssize_t prev_suf = 0; /* The length of the previously matched suffix. */
-
-    /* While there is a long enough text to search. */
-    while (srch_pos <= len - pat_len) {
-        /* Find the first mismatched character pair (from the end). */
-        ssize_t i = pat_len - 1;
-        while (i >= 0 && comp->pattern.stnd[i] == text[srch_pos + i]) {
-            i--;
-            if (prev_suf != 0 && i == pat_len - 1 - shift) {
-                i -= prev_suf;
-            }
-        }
-
-        /* If i < 0, the whole pattern matched with the text,
-         * if not, there was a mismatch and we can shift the search. */
-        if (i < 0) {
-            if ((!comp->has_bol_anchor || bol_matches_stnd(text, srch_pos)) &&
-                (!comp->has_eol_anchor || eol_matches_stnd(text, len, srch_pos + pat_len)) &&
-                store_matches) {
-                result[res_cnt].soffset = srch_pos;
-                result[res_cnt].eoffset = srch_pos + pat_len;
-                res_cnt++;
-            }
-
-            // In any case, we found a match. Returning.
-            return (REG_OK);
-        } else {
-            /* Apply Turbo-BM calculations. */
-            ssize_t v = pat_len - 1 - i;
-            ssize_t turbo_shift = prev_suf - v;
-            ssize_t bad_shift = badc_shs[text[srch_pos + i]] - v;
-            
-            shift = max(turbo_shift, bad_shift);
-            shift = max(shift, good_shs[i]);
-
-            if (shift == good_shs[i]) {
-                prev_suf = min(pat_len - shift, v);
-            } else {
-                if (turbo_shift < bad_shift) {
-                    shift = max(shift, prev_suf + 1);
-                }
-                prev_suf = 0;
-            }
-        }
-        srch_pos += shift;
-    }
-    
-    /* If we didn't fill up the required number of matches,
-     * mark this by setting the next result to -1, -1. */
-    if (res_cnt < nmatch) {
-        result[res_cnt].soffset = -1;
-        result[res_cnt].eoffset = -1;
-    }
-
-    return (res_cnt == 0) ? (REG_NOMATCH) : (REG_OK);
-}
-
-/*
- * Executes the turbo Boyer-Moore algorithm on the given text with the given
- * length, and stores at most nmatch number of results in the given result
- * array. Will not store matches if that flag is set.
- * Private method, called by bm_execute_wide.
- */
-static int
-exec_turbo_bm_wide(
-    frec_match_t result[], size_t nmatch,
-    bm_comp *comp, const wchar_t *text, ssize_t len,
-    bool store_matches)
-{
-    ssize_t res_cnt = 0; /* A new match will be written to this index of result. */
-
-    ssize_t srch_pos = 0; /* The current start pos in the text of our search. */
-    ssize_t pat_len = comp->pattern.len; /* The length of the pattern. */
-    unsigned int *good_shs = comp->good_shifts;
-    hashtable *badc_shs = comp->bad_shifts_wide;
-
-    ssize_t shift = pat_len; /* This variable is used to shift srch_pos. */
-    ssize_t prev_suf = 0; /* The length of the previously matched suffix. */
-
-    /* While there is a long enough text to search. */
-    while (srch_pos <= len - pat_len) {
-        /* Find the first mismatched character pair (from the end). */
-        ssize_t i = pat_len - 1;
-        while (i >= 0 && comp->pattern.wide[i] == text[srch_pos + i]) {
-            i--;
-            if (prev_suf != 0 && i == pat_len - 1 - shift) {
-                i -= prev_suf;
-            }
-        }
-
-        /* If i < 0, the whole pattern matched with the text,
-         * if not, there was a mismatch, and we can shift the search. */
-        if (i < 0) {
-            if ((!comp->has_bol_anchor || bol_matches_wide(text, srch_pos)) &&
-                (!comp->has_eol_anchor || eol_matches_wide(text, len, srch_pos + pat_len)) &&
-                store_matches) {
-                result[res_cnt].soffset = srch_pos;
-                result[res_cnt].eoffset = srch_pos + pat_len;
-                res_cnt++;
-            }
-
-            // In any case, we found a match. Returning.
-            return (REG_OK);
-        } else {
-            /* Apply Turbo-BM calculations. */
-            ssize_t v = pat_len - 1 - i;
-            ssize_t turbo_shift = prev_suf - v;
-
-            wchar_t key = text[srch_pos + i];
-            int value;
-            hashtable_get(badc_shs, &key, &value);
-
-            ssize_t bad_shift = value - v;
-            
-            shift = max(turbo_shift, bad_shift);
-            shift = max(shift, good_shs[i]);
-
-            if (shift == good_shs[i]) {
-                prev_suf = min(pat_len - shift, v);
-            } else {
-                if (turbo_shift < bad_shift) {
-                    shift = max(shift, prev_suf + 1);
-                }
-                prev_suf = 0;
-            }
-        }
-        srch_pos += shift;
-    }
-
-    /* If we didn't fill up the required number of matches,
-     * mark this by setting the next result to -1, -1. */
-    if (res_cnt < nmatch) {
-        result[res_cnt].soffset = -1;
-        result[res_cnt].eoffset = -1;
-    }
-
-    return (res_cnt == 0) ? (REG_NOMATCH) : (REG_OK);
-}
-
-/*
- * Executes the Boyer-Moore algorithm on the given text (with the
- * specified length) and with the given prep preprocessing struct.
- * Stores at most nmatch results in the result array.
- * An nmatch of 0 means that the search is executed, but only a
- * simple REG_OK or REG_NOMATCH is returned.
- * Execution flags can be supplied in the eflags field.
- */
-int
-bm_execute(
-    frec_match_t result[], size_t nmatch,
-    bm_comp *comp, string text, int eflags
+exec_turbo_bm(
+    frec_match_t *result, const bm_comp *comp, string text, bool store_matches
 ) {
-    /* Set bool fields. */
-    bool store_matches = !comp->is_nosub_set && nmatch != 0 && result != NULL;
+    const string patt = comp->pattern; // Shortcut variable to pattern.
+
+    ssize_t srch_pos = 0; // The current start pos in the text, can change.
+
+    ssize_t shift = patt.len; // Used to shift srch_pos, can change.
+    ssize_t prev_suf = 0; // The matched suffix length on our previous try.
+
+    while (srch_pos + patt.len <= text.len) {
+        // Find the first mismatched character pair (from the end).
+        ssize_t i = patt.len - 1;
+        while (i >= 0 && compare_strings_at(patt, i, text, srch_pos + i)) {
+            i--;
+            if (prev_suf != 0 && i == patt.len - 1 - shift) {
+                i -= prev_suf;
+            }
+        }
+
+        // If i < 0, the whole pattern matched with the text.
+        // Otherwise, there was a mismatch, and we can shift the search.
+        if (i < 0) {
+            // Check BOL and EOL. If they have to match, our current
+            // candidate may not be correct.
+            bool can_return = true;
+            if (comp->has_bol_anchor) {
+                can_return &= ((srch_pos == 0)
+                    || string_has_newline_at(text, srch_pos - 1));
+            }
+
+            if (comp->has_eol_anchor) {
+                ssize_t end = srch_pos + patt.len;
+                can_return &= ((end == text.len)
+                    || string_has_newline_at(text, end));
+            }
+
+            // Only return if the above checks succeeded.
+            if (can_return) {
+                // If we don't have to store matches, just return.
+                if (!store_matches) {
+                    return (REG_OK);
+                }
+
+                // Else set the resulting offsets and return.
+                result->soffset = srch_pos;
+                result->eoffset = srch_pos + patt.len;
+                return (REG_OK);
+            }
+
+            // Otherwise, continue the while loop.
+        } else {
+            // Apply Turbo-BM calculations.
+            ssize_t v = patt.len - 1 - i;
+            ssize_t turbo_shift = prev_suf - v;
+
+            ssize_t value;
+
+            if (text.is_wide) {
+                wchar_t key = text.wide[srch_pos + i];
+                int ret = hashtable_get(comp->bad_shifts_wide, &key, &value);
+                // If the char is not present in the hash, this shift value
+                // equals the length of the pattern.
+                if (ret != HASH_OK) {
+                    value = patt.len;
+                }
+            } else {
+                value = comp->bad_shifts_stnd[text.stnd[srch_pos + i]];
+            }
+
+            ssize_t bad_shift = (int) value - v;
+            
+            shift = max(turbo_shift, bad_shift);
+            shift = max(shift, comp->good_shifts[i]);
+
+            if (shift == comp->good_shifts[i]) {
+                prev_suf = min(patt.len - shift, v);
+            } else {
+                if (turbo_shift < bad_shift) {
+                    shift = max(shift, prev_suf + 1);
+                }
+                prev_suf = 0;
+            }
+        }
+        srch_pos += shift;
+    }
+
+    // We only exit the while loop if we reached the end of the text.
+    return (REG_NOMATCH);
+}
+
+int
+bm_execute(frec_match_t *result, const bm_comp *comp, string text, int eflags)
+{
+    // Entry condition: the comp was created with the same char type as text.
+    if (comp->pattern.is_wide != text.is_wide) {
+        return (REG_BADPAT);
+    }
+
+    // Set bool fields.
+    bool store_matches = !comp->is_nosub_set && result != NULL;
     bool no_bol_anchor = eflags & REG_NOTBOL;
     bool no_eol_anchor = eflags & REG_NOTEOL;
 
-    ssize_t len = text.len;
-
-    /* If we don't know the length of the text, find out. */
-    if (len == (size_t) - 1) {
-        len = (text.is_wide) ? wcslen(text.wide) : strlen(text.stnd);
-    }
-
-    /* If the prep pattern matches everything, return early. */
+    // If the prep pattern matches everything, return early.
     if (comp->has_glob_match) {
         if (store_matches) {
             result[0].soffset = 0;
-            result[0].eoffset = len;
-            /* If we expected more submatches, signal the boundary here */
-            if (nmatch > 1) {
-                result[1].soffset = -1;
-                result[1].eoffset = -1;
-            }
+            result[0].eoffset = text.len;
         }
         return (REG_OK);
     }
 
-    /* If BOL and EOL don't match the start and end of the text, we won't
-     * accept any matches that are at the very beginning or the very end. */
+    // If BOL and EOL can't match the start and end of the text, we won't
+    // accept any matches that are at the very beginning or the very end.
     if (comp->has_bol_anchor && no_bol_anchor) {
-        text.is_wide ? (text.wide++) : (text.stnd++);
-        len--;
+        string_offset(&text, 1);
     }
     if (comp->has_eol_anchor && no_eol_anchor) {
-        len--;
+        text.len--;
     }
 
-    /* If the original pattern is longer than the text, return. */
-    if (comp->pattern.len > len) {
+    // If the original pattern is longer than the text, return.
+    if (comp->pattern.len > text.len) {
         return (REG_NOMATCH);
     }
 
-    /* Execute BM algorithm. */
-    return (text.is_wide)
-        ? exec_turbo_bm_wide(result, nmatch, comp, text.wide, len, store_matches)
-        : exec_turbo_bm_stnd(result, nmatch, comp, text.stnd, len, store_matches);
+    // Execute BM algorithm.
+    return exec_turbo_bm(result, comp, text, store_matches);
 }

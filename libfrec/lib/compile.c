@@ -30,6 +30,7 @@
 #include <wchar.h>
 
 #include "bm.h"
+#include "convert.h"
 #include "frec-internal.h"
 #include "wu-manber.h"
 
@@ -77,7 +78,20 @@ compile_heuristic(frec_t *frec, string pattern, int cflags)
     }
 
     // Execute heuristic compilation.
-    int ret = frec_preprocess_heur(heur, pattern, cflags);
+    int ret;
+    if (pattern.is_wide) {
+        ret = frec_preprocess_heur(heur, pattern, cflags, false);
+    } else {
+        wchar_t *wide;
+        ssize_t len;
+
+        convert_mbs_to_wcs(pattern.stnd, pattern.len, &wide, &len);
+
+        string wpattern;
+        string_borrow(&wpattern, wide, len, true);
+        ret = frec_preprocess_heur(heur, wpattern, cflags, true);
+        free(wide);
+    }
     
     // If valid, set the relevant return field, else free the struct.
     if (ret == REG_OK) {
@@ -129,6 +143,7 @@ frec_compile(frec_t *frec, string pattern, int cflags)
  * Given a newly allocated mfrec_t struct, this method fills all
  * its compilation-related fields.
  */
+/*
 int
 frec_mcompile(mfrec_t *mfrec, size_t k,
     const wchar_t **patterns, size_t *lens, int cflags)
@@ -141,33 +156,33 @@ frec_mcompile(mfrec_t *mfrec, size_t k,
     mfrec->cflags = cflags;
     mfrec->searchdata = NULL; // TODO Bad name :(
 
-    /* Compile each pattern. */
+    // Compile each pattern.
     for (size_t i = 0; i < k; i++) {
         int ret = frec_compile(
             &mfrec->patterns[i], patterns[i], lens[i], cflags);
-        /* On error, we record the index of the bad pattern. */
+        // On error, we record the index of the bad pattern.
         if (ret != REG_OK) {
             mfrec->err = i;
             // TODO FREE mfrec
         }
     }
 
-    /* If there's only one pattern, return early. */
+    // If there's only one pattern, return early.
     if (k == 1) {
         mfrec->type = MHEUR_SINGLE;
         return (REG_OK);
     }
 
-    /* Set the heuristic type based on the compilation flags. */
+    // Set the heuristic type based on the compilation flags.
     if (cflags & REG_LITERAL) {
         mfrec->type = MHEUR_LITERAL;
     } else if (cflags & REG_NEWLINE) {
         // TODO I Don't yet understand this case.
         mfrec->type = MHEUR_LONGEST;
     } else {
-        /* If not explicitly marked, check if all patterns can be
-         * matched either literally, or with the HEUR_LONGEST heuristic.
-         * If not, we can't speed up the multiple pattern matcher. */
+        // If not explicitly marked, check if all patterns can be
+        // matched either literally, or with the HEUR_LONGEST heuristic.
+        // If not, we can't speed up the multiple pattern matcher.
         for (size_t i = 0; i < k; i++) {
             frec_t *curr = &mfrec->patterns[i];
             if (curr->boyer_moore == NULL && 
@@ -179,14 +194,14 @@ frec_mcompile(mfrec_t *mfrec, size_t k,
         mfrec->type = MHEUR_LONGEST;
     }
 
-    /* If we reach this point, we'll definitely need this struct. */
+    // If we reach this point, we'll definitely need this struct.
     wmsearch_t *wumanber = malloc(sizeof(wmsearch_t));
     if (wumanber == NULL) {
         // TODO Free mfrec
     }
     wumanber->cflags = cflags;
 
-    /* If the heuristic type was literal, we'll use the patterns as-is. */
+    // If the heuristic type was literal, we'll use the patterns as-is.
     if (mfrec->type == MHEUR_LITERAL) {
         int ret = frec_wmcomp(wumanber, k, patterns, lens, cflags);
         if (ret != REG_OK) {
@@ -194,8 +209,8 @@ frec_mcompile(mfrec_t *mfrec, size_t k,
             return ret;
         }
     } else {
-        /* Otherwise we'll assemble the patterns from the Boyer-Moore
-         * or the heuristic compilation phase. */
+        // Otherwise we'll assemble the patterns from the Boyer-Moore
+        // or the heuristic compilation phase.
         const wchar_t **pat_ptrs = malloc(sizeof(wchar_t *) * k);
         if (pat_ptrs == NULL) {
             // TODO Free mfrec, wumanber
@@ -207,7 +222,7 @@ frec_mcompile(mfrec_t *mfrec, size_t k,
             return (REG_ESPACE);
         }
 
-        /* Reference values from previous optimalizations. */
+        // Reference values from previous optimalizations.
         for (size_t i = 0; i < k; i++) {
             frec_t *curr = &mfrec->patterns[i];
             if (curr->boyer_moore != NULL) {
@@ -219,7 +234,7 @@ frec_mcompile(mfrec_t *mfrec, size_t k,
             }
         }
 
-        /* Execute compilation and free temporary arrays. */
+        // Execute compilation and free temporary arrays.
         int ret = frec_wmcomp(wumanber, k, pat_ptrs, len_ptrs, cflags);
         free(pat_ptrs);
         free(len_ptrs);
@@ -234,3 +249,4 @@ frec_mcompile(mfrec_t *mfrec, size_t k,
     
     return (REG_OK);
 }
+*/

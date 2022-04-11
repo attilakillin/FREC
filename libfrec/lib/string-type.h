@@ -34,6 +34,11 @@ string_copy(string *str, const void *content, ssize_t len, bool is_wide);
 bool
 string_duplicate(string *target, string src);
 
+// Null-initializes the given string. Either this, borrow, or copy must be
+// called in order for the free function to work properly.
+void
+string_init(string *str);
+
 // Frees the resources associated with the given string. The str pointer
 // itself is not freed. If the content was borrowed, it will not be freed.
 void

@@ -22,7 +22,7 @@ bool
 string_copy(string *str, const void *content, ssize_t len, bool is_wide)
 {
     str->is_wide = is_wide;
-    str->len = 0;
+    str->len = len;
     str->owned = true;
 
     if (is_wide) {
@@ -57,6 +57,16 @@ string_duplicate(string *target, string src)
 {
     void *content = ((src.is_wide) ? src.wide : src.stnd);
     return string_copy(target, content, src.len, src.is_wide);
+}
+
+void
+string_init(string *str)
+{
+    str->wide = NULL;
+    str->stnd = NULL;
+    str->len = 0;
+    str->owned = false;
+    str->is_wide = false;
 }
 
 void

@@ -58,7 +58,7 @@ match_heuristic(
         while (text.len > 0) {
 
             // Find candidate match.
-            ret = bm_execute(&candidate, 1, heur->literal_comp, text, eflags);
+            ret = bm_execute(&candidate, &heur->literal_comp, text, eflags);
 
             // If no candidates were found, return as such.
             if (ret != REG_OK) {
@@ -117,7 +117,7 @@ match_heuristic(
         // the start of this candidate to the end of the original text.
 
         frec_match_t candidate;
-        ret = bm_execute(&candidate, 1, heur->literal_comp, text, eflags);
+        ret = bm_execute(&candidate, &heur->literal_comp, text, eflags);
 
         // If not even a candidate was found, we'll return early.
         if (ret != REG_OK) {
@@ -149,7 +149,8 @@ frec_match(
     heur *heur = preg->heuristic;
 
     if (bm != NULL) {
-        return bm_execute(pmatch, nmatch, bm, text, eflags);
+        frec_match_t *result = (nmatch == 0) ? NULL : &pmatch[0];
+        return bm_execute(result, bm, text, eflags);
     } else if (heur != NULL) {
         return match_heuristic(pmatch, nmatch, heur, orig, text, eflags);
     } else {
