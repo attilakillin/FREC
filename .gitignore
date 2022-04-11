@@ -34,3 +34,5 @@ libfrec/tests/**
 
 # Ignore IDE-specific folders and files
 .vscode/
+.idea/
+build/

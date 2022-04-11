@@ -24,19 +24,17 @@
  * SUCH DAMAGE.
  */
 
-#include <sys/types.h>
 #include <stdlib.h>
-#include <string.h>
-#include <wchar.h>
+#include <string-type.h>
 #include <frec-config.h>
 
 #include "convert.h"
 
 int
-convert_wcs_to_mbs(const wchar_t *wcs, size_t wn, char **mbs, size_t *mn)
+convert_wcs_to_mbs(const wchar_t *wcs, ssize_t wn, char **mbs, ssize_t *mn)
 {
 	/* Check the validity of the wide char string. */
-	size_t size = wcstombs(NULL, wcs, 0);
+	ssize_t size = (ssize_t) wcstombs(NULL, wcs, 0);
 	if (size == (size_t) - 1) {
 		return (REG_BADPAT);
 	}
@@ -56,10 +54,10 @@ convert_wcs_to_mbs(const wchar_t *wcs, size_t wn, char **mbs, size_t *mn)
 }
 
 int
-convert_mbs_to_wcs(const char *mbs, size_t mn, wchar_t **wcs, size_t *wn)
+convert_mbs_to_wcs(const char *mbs, ssize_t mn, wchar_t **wcs, ssize_t *wn)
 {	
 	/* Check the validity of the multibyte string. */
-	size_t size = mbstowcs(NULL, mbs, 0);
+	ssize_t size = (ssize_t) mbstowcs(NULL, mbs, 0);
 	if (size == (size_t) - 1) {
 		return (REG_BADPAT);
 	}

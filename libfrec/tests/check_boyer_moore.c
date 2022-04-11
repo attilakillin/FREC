@@ -2,9 +2,8 @@
 #include <check.h>
 #include <frec.h>
 #include <stdlib.h>
-
-#include "boyer-moore.h"
-#include "type-unification.h"
+#include "bm.h"
+#include "string-type.h"
 
 /* 
  * Runs the Boyer-Moore preprocessing phase. Takes the text literally.
@@ -13,11 +12,14 @@
 static int
 run_preprocess_literal(const wchar_t *pattern, int flags)
 {
-    bm_preproc_t *preg = bm_create_preproc();
+    bm_comp comp;
+    bm_comp_init(&comp, flags);
 
-    int ret = bm_preprocess_literal(preg, pattern, wcslen(pattern), flags);
+    string str;
+    string_borrow(&str, pattern, (ssize_t) wcslen(pattern), true);
+    int ret = bm_compile_literal(&comp, str, flags);
 
-    bm_free_preproc(preg);
+    bm_comp_free(&comp);
     return ret;
 }
 
@@ -28,11 +30,14 @@ run_preprocess_literal(const wchar_t *pattern, int flags)
 static int
 run_preprocess_full(const wchar_t *pattern, int flags)
 {
-    bm_preproc_t *preg = bm_create_preproc();
+    bm_comp comp;
+    bm_comp_init(&comp, flags);
 
-    int ret = bm_preprocess_full(preg, pattern, wcslen(pattern), flags);
+    string str;
+    string_borrow(&str, pattern, (ssize_t) wcslen(pattern), true);
+    int ret = bm_compile_full(&comp, str, flags);
 
-    bm_free_preproc(preg);
+    bm_comp_free(&comp);
     return ret;
 }
 
@@ -43,23 +48,26 @@ run_preprocess_full(const wchar_t *pattern, int flags)
  */
 static int
 run_execute(
-    frec_match_t *matches, size_t match_cnt,
-    const wchar_t *pattern, const char *text, int flags
+    frec_match_t *matches,
+    const wchar_t *pattern, const wchar_t *text, int flags
 )
 {
-    bm_preproc_t *preg = bm_create_preproc();
-    str_t *string = string_create_stnd(text, strlen(text));
+    bm_comp comp;
+    bm_comp_init(&comp, flags);
 
-    int ret = bm_preprocess_full(preg, pattern, wcslen(pattern), flags);
+    string str;
+    string_borrow(&str, pattern, (ssize_t) wcslen(pattern), true);
+    int ret = bm_compile_full(&comp, str, flags);
     ck_assert_msg(ret == REG_OK,
         "Execute failed because preprocessing failed: returned '%d' for '%ls'",
         ret, pattern
     );
 
-    ret = bm_execute(matches, match_cnt, preg, string, flags);
+    string txt;
+    string_borrow(&txt, text, (ssize_t) wcslen(text), true);
+    ret = bm_execute(matches, &comp, txt, flags);
 
-    string_free(string);
-    bm_free_preproc(preg);
+    bm_comp_free(&comp);
     return ret;
 }
 
@@ -151,21 +159,21 @@ END_TEST
 
 START_TEST(test_bm__sanity__execute_on_match_ok)
 {
-    int ret = run_execute(NULL, 0, L"something", "text that contains something here", 0);
+    int ret = run_execute(NULL, L"something", L"text that contains something here", 0);
     ck_assert_msg(ret == REG_OK, "Sanity execution failed on match: returned '%d'", ret);
 }
 END_TEST
 
 START_TEST(test_bm__sanity__execute_on_nomatch_ok)
 {
-    int ret = run_execute(NULL, 0, L"something", "text that doesn't contain it", 0);
+    int ret = run_execute(NULL, L"something", L"text that doesn't contain it", 0);
     ck_assert_msg(ret == REG_NOMATCH, "Sanity execution failed on nomatch: returned '%d'", ret);
 }
 END_TEST
 
 typedef struct exec_tuple {
     const wchar_t *pattern;
-    const char *text;
+    const wchar_t *text;
     int flags;
     frec_match_t expected;
 } exec_tuple;
@@ -173,23 +181,23 @@ typedef struct exec_tuple {
 #define EXEC_SUCC_LEN 14
 static exec_tuple exec_successes[EXEC_SUCC_LEN] = {
     /* Test on full match */
-    {L"exactly the same", "exactly the same", 0, {0, 16}},
+    {L"exactly the same", L"exactly the same", 0, {0, 16}},
     /* Same in BRE and ERE */
-    {L"p\\[r]int", "text that p[r]ints", 0, {10, 17}},
-    {L"p\\[r]int", "text that p[r]ints", REG_EXTENDED, {10, 17}},
-    {L"p\\*int", "text that p*ints", 0, {10, 15}},
-    {L"p\\*int", "text that p*ints", REG_EXTENDED, {10, 15}},
-    {L"p\\.int", "text that p.ints", 0, {10, 15}},
-    {L"p\\.int", "text that p.ints", REG_EXTENDED, {10, 15}},
+    {L"p\\[r]int", L"text that p[r]ints", 0, {10, 17}},
+    {L"p\\[r]int", L"text that p[r]ints", REG_EXTENDED, {10, 17}},
+    {L"p\\*int", L"text that p*ints", 0, {10, 15}},
+    {L"p\\*int", L"text that p*ints", REG_EXTENDED, {10, 15}},
+    {L"p\\.int", L"text that p.ints", 0, {10, 15}},
+    {L"p\\.int", L"text that p.ints", REG_EXTENDED, {10, 15}},
     /* BRE and ERE inverted */
-    {L"print(ln)", "text that print(ln)s", 0, {10, 19}},
-    {L"print\\(ln)", "text that print(ln)s", REG_EXTENDED, {10, 19}},
-    {L"print{1,2}", "text that print{1,2}s", 0, {10, 20}},
-    {L"print\\{1,2}", "text that print{1,2}s", REG_EXTENDED, {10, 20}},
+    {L"print(ln)", L"text that print(ln)s", 0, {10, 19}},
+    {L"print\\(ln)", L"text that print(ln)s", REG_EXTENDED, {10, 19}},
+    {L"print{1,2}", L"text that print{1,2}s", 0, {10, 20}},
+    {L"print\\{1,2}", L"text that print{1,2}s", REG_EXTENDED, {10, 20}},
     /* Only in ERE*/
-    {L"p\\|int", "text that p|ints", REG_EXTENDED, {10, 15}},
-    {L"p\\+int", "text that p+ints", REG_EXTENDED, {10, 15}},
-    {L"p\\?int", "text that p?ints", REG_EXTENDED, {10, 15}},
+    {L"p\\|int", L"text that p|ints", REG_EXTENDED, {10, 15}},
+    {L"p\\+int", L"text that p+ints", REG_EXTENDED, {10, 15}},
+    {L"p\\?int", L"text that p?ints", REG_EXTENDED, {10, 15}},
 };
 
 START_TEST(loop_test_bm__successes__single_exec_succeeds)
@@ -197,7 +205,7 @@ START_TEST(loop_test_bm__successes__single_exec_succeeds)
     exec_tuple current = exec_successes[_i];
 
     frec_match_t match;
-    int ret = run_execute(&match, 1, current.pattern, current.text, current.flags);
+    int ret = run_execute(&match, current.pattern, current.text, current.flags);
 
     ck_assert_msg(ret == REG_OK,
         "Execution did not succed: returned '%d' for pattern '%ls' and text '%s' with flags '%d'",

@@ -1,11 +1,19 @@
-#ifndef COMPILE_H
-#define COMPILE_H 1
-
-#include <wchar.h>
+#ifndef FREC_COMPILE_H
+#define FREC_COMPILE_H
 
 #include "frec-internal.h"
+#include "string-type.h"
 
-int frec_compile(frec_t *frec, const wchar_t *pattern, size_t len, int cflags);
-int frec_mcompile(mfrec_t *mfrec, size_t k, const wchar_t **patterns, size_t *lens, int cflags);
+// Given a frec_t struct and a pattern with a given length, compile a
+// usual NFA struct (supplied by the underlying library), a Boyer-Moore
+// fast text searching struct, and a custom heuristic struct.
+// Additional flags may be supplied using the cflags parameter.
+//
+// Given a newly allocated frec_t struct, this method fills all
+// its compilation-related fields.
+int frec_compile(frec_t *frec, string pattern, int cflags);
+
+
+//int frec_mcompile(mfrec_t *mfrec, size_t k, const string *patterns, int cflags);
 
 #endif

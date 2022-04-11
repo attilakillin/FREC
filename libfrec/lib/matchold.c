@@ -29,23 +29,23 @@
 #include <string.h>
 #include <wchar.h>
 
-#include "boyer-moore.h"
+#include "bm.h"
 #include "match.h"
 #include "frec-internal.h"
-#include "type-unification.h"
+#include "string-type.h"
 #include "wu-manber.h"
 
 int
 oldfrec_match(const frec_t *preg, const void *str, size_t len,
     int type, size_t nmatch, frec_match_t pmatch[], int eflags)
 {
-	str_t text;
+	string text;
 	text.len = len;
 	text.is_wide = type == STR_WIDE;
 	text.stnd = (!text.is_wide) ? str : NULL;
 	text.wide = (text.is_wide) ? str : NULL;
 
-	return frec_match(pmatch, nmatch, preg, &text, eflags);
+	return frec_match(pmatch, nmatch, preg, text, eflags);
 }
 
 int

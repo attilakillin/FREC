@@ -24,43 +24,41 @@
  * SUCH DAMAGE.
  */
 
-#include <sys/types.h>
+#include <stdbool.h>
 #include <stdlib.h>
-#include <string.h>
+#include <string-type.h>
 #include <wchar.h>
+#include <string.h>
 
+#include "bm-type.h"
 #include "compile.h"
 #include "convert.h"
 #include "heuristic.h"
 #include "match.h"
 #include "frec-internal.h"
+#include "string-type.h"
 #include "wu-manber.h"
 
 int
 frec_regncomp(frec_t *preg, const char *regex, size_t len, int cflags)
 {
-	wchar_t *wregex;
-	size_t wlen;
+    string pattern;
+    string_borrow(&pattern, regex, (ssize_t) len, false);
 
-	int ret = convert_mbs_to_wcs(regex, len, &wregex, &wlen);
-	if (ret != REG_OK) {
-		return ret;
-	}
+	int ret = frec_compile(preg, pattern, cflags);
 
-	ret = frec_compile(preg, wregex, wlen, cflags);
-
-	free(wregex);
+    string_free(&pattern);
 	return ret;
 }
 
 int
 frec_regcomp(frec_t *preg, const char *regex, int cflags)
 {
-	size_t len;
+	ssize_t len;
 	if ((cflags & REG_PEND) && preg->re_endp >= regex) {
 		len = preg->re_endp - regex;
 	} else {
-		len = (regex != NULL) ? strlen(regex) : 0;
+		len = (regex != NULL) ? ((ssize_t) strlen(regex)) : 0;
 	}
 
 	return frec_regncomp(preg, regex, len, cflags);
@@ -69,17 +67,23 @@ frec_regcomp(frec_t *preg, const char *regex, int cflags)
 int
 frec_regwncomp(frec_t *preg, const wchar_t *regex, size_t len, int cflags)
 {
-	return frec_compile(preg, regex, len, cflags);
+    string pattern;
+    string_borrow(&pattern, regex, (ssize_t) len, true);
+
+    int ret = frec_compile(preg, pattern, cflags);
+
+    string_free(&pattern);
+    return ret;
 }
 
 int
 frec_regwcomp(frec_t *preg, const wchar_t *regex, int cflags)
 {
-	size_t len;
+	ssize_t len;
 	if ((cflags & REG_PEND) && preg->re_wendp >= regex) {
 		len = preg->re_wendp - regex;
 	} else {
-		len = (regex != NULL) ? wcslen(regex) : 0;
+		len = (regex != NULL) ? ((ssize_t) wcslen(regex)) : 0;
 	}
 
 	return frec_regwncomp(preg, regex, len, cflags);
@@ -88,7 +92,8 @@ frec_regwcomp(frec_t *preg, const wchar_t *regex, int cflags)
 void
 frec_regfree(frec_t *preg)
 {
-	bm_free_preproc(preg->boyer_moore);
+	bm_comp_free(preg->boyer_moore);
+    free(preg->boyer_moore);
 	frec_free_heur(preg->heuristic);
 	_dist_regfree(&preg->original);
 }
@@ -149,8 +154,8 @@ inline static void calc_offsets_post(regexec_state *state)
 
 	if ((state->eflags & REG_STARTEND) && !(state->cflags & REG_NOSUB))
 		for (size_t i = 0; i < state->nmatch; i++) {
-			state->pmatch[i].soffset += state->offset;
-			state->pmatch[i].soffset += state->offset;
+			state->pmatch[i].soffset += (ssize_t) state->offset;
+			state->pmatch[i].soffset += (ssize_t) state->offset;
 			DEBUG_PRINTF("pmatch[%zu] offsets %d - %d", i,
 			    state->pmatch[i].soffset, state->pmatch[i].soffset);
 		}
@@ -167,21 +172,19 @@ _regexec(const void *preg, const void *str, size_t len,
 
 	init_state(&state, preg, str, len, nmatch, pmatch, cflags, eflags, type);
 	calc_offsets_pre(&state);
-	if ((state.eflags & REG_STARTEND) && (state.pmatch[0].soffset > state.pmatch[0].soffset))
+	if ((state.eflags & REG_STARTEND) && (state.pmatch[0].soffset > state.pmatch[0].eoffset))
 		return (REG_NOMATCH);
 	if (multi)
 		ret = oldfrec_mmatch(&((const wchar_t *)state.str)[state.offset],
 		    state.slen, state.type, state.nmatch, state.pmatch,
 		    state.eflags, state.preg);
 	else {
-		str_t *text = (type == STR_WIDE)
-			? string_create_wide(str, len)
-			: string_create_stnd(str, len);
-
-		string_offset_by(text, state.offset);
+        string text;
+        string_borrow(&text, str, (ssize_t) len, type == STR_WIDE);
+        string_offset(&text, (ssize_t) state.offset);
 		ret = frec_match(state.pmatch, state.nmatch, state.preg, text, eflags);
 
-		string_free(text);
+		string_free(&text);
 	}
 	if (ret == REG_OK)
 		calc_offsets_post(&state);
@@ -199,15 +202,11 @@ frec_regnexec(const frec_t *preg, const char *str, size_t len,
 }
 
 int
-frec_regexec(const frec_t *preg, const char *str,
-    size_t nmatch, frec_match_t pmatch[], int eflags)
-{
-
-	int ret = frec_regnexec(preg, str, (size_t)-1, nmatch,
-	    pmatch, eflags);
-
-	DEBUG_PRINTF("returning %d", ret);
-	return ret;
+frec_regexec(
+    const frec_t *preg, const char *str,
+    size_t nmatch, frec_match_t pmatch[], int eflags
+) {
+	return frec_regnexec(preg, str, strlen(str), nmatch, pmatch, eflags);
 }
 
 
@@ -219,13 +218,11 @@ frec_regwnexec(const frec_t *preg, const wchar_t *str, size_t len,
 }
 
 int
-frec_regwexec(const frec_t *preg, const wchar_t *str,
-    size_t nmatch, frec_match_t pmatch[], int eflags)
-{
-	int ret = frec_regwnexec(preg, str, (size_t)-1, nmatch,
-	    pmatch, eflags);
-	DEBUG_PRINTF("returning %d", ret);
-	return ret;
+frec_regwexec(
+    const frec_t *preg, const wchar_t *str,
+    size_t nmatch, frec_match_t pmatch[], int eflags
+) {
+	return frec_regwnexec(preg, str, wcslen(str), nmatch, pmatch, eflags);
 }
 
 
@@ -258,7 +255,7 @@ frec_mregncomp(mfrec_t *preg, size_t nr, const char **regex,
 	}
 
 	wr = (const wchar_t **)wregex;
-	ret = frec_mcompile(preg, nr, wr, wlen, cflags);
+	//ret = frec_mcompile(preg, nr, wr, wlen, cflags);
 
 err:
 	if (wregex) {
@@ -324,7 +321,7 @@ frec_mregwncomp(mfrec_t *preg, size_t nr, const wchar_t **regex,
 	}
 
 	sr = (const char **)sregex;
-	ret = frec_mcompile(preg, nr, regex, n, cflags);
+	//ret = frec_mcompile(preg, nr, regex, n, cflags);
 
 err:
 	if (sregex) {

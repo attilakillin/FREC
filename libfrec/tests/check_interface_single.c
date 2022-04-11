@@ -4,23 +4,25 @@
 
 static void
 compile_and_run(
-	frec_match_t *matches, size_t match_cnt,
-	const char *pattern, const char *text, int flags
+    frec_match_t *pmatch, size_t nmatch,
+    const char *pattern, const char *text, int flags
 ) {
 	frec_t prep;
 	int ret = frec_regcomp(&prep, pattern, flags);
 
 	ck_assert_msg(ret == REG_OK,
-		"Compilation failed: returned '%d' for pattern '%s'",
+		"regcomp failed: returned '%d' for pattern '%s'",
 		ret, pattern
 	);
 
-	ret = frec_regexec(&prep, text, match_cnt, matches, flags);
+	ret = frec_regexec(&prep, text, nmatch, pmatch, flags);
 
 	ck_assert_msg(ret == REG_OK || ret == REG_NOMATCH,
-		"Matching failed: returned '%d' for pattern '%s' and text '%s'",
+		"regexec failed: returned '%d' for pattern '%s' and text '%s'",
 		ret, pattern, text
 	);
+
+    frec_regfree(&prep);
 }
 
 
@@ -28,46 +30,42 @@ typedef struct match_tuple {
 	const char *pattern;
 	const char *text;
 	int flags;
-	size_t match_cnt;
-	frec_match_t matches[10];
+	frec_match_t match;
 } match_tuple;
 
 #define INPUT_LEN 5
 static match_tuple inputs[INPUT_LEN] = {
 	/* Literal matching */
-	{"pattern", "text with pattern", 0, 2, {{10,17}, {-1,-1}}},
-	{"many", "many many many many", 0, 5, {{0,4}, {5,9}, {10,14}, {15,19}, {-1,-1}}},
+	{"pattern", "text with pattern", 0, {10,17}},
+	{"many", "many many many many", 0, {0,4}},
 	
 	/* Literal matching with escapes */
-	{"\\$()\\$", "text with $()$ chars", 0, 2, {{10,14}, {-1,-1}}},
+	{"\\$()\\$", "text with $()$ chars", 0, {10,14}},
 
 	/* Longest matching */
-	{"p..ce", "piece peace pounce", 0, 3, {{0,5}, {6,11}, {-1,-1}}},
-	{"[ai][cx]e", "words with the letter e but only axe matches", 0, 2, {{33,36}, {-1,-1}}}
+	{"p..ce", "piece peace pounce", 0, {0,5}},
+	{"[ai][cx]e", "words with the letter e but only axe matches", 0, {33,36}}
 };
 
 
 START_TEST(loop_test_interface__comp_and_match__offsets_ok)
 {
-    frec_match_t actuals[10];
+    frec_match_t actual;
 	match_tuple curr = inputs[_i];
 
-	compile_and_run(actuals, 10, curr.pattern, curr.text, curr.flags);
+	compile_and_run(&actual, 1, curr.pattern, curr.text, curr.flags);
 
-	for (size_t i = 0; i < curr.match_cnt; i++) {
-		frec_match_t actual = actuals[i];
-		frec_match_t expect = curr.matches[i];
+    frec_match_t expect = curr.match;
 
-		ck_assert_msg(expect.soffset == actual.soffset,
-			"Matching returned incorrect soffset: expected '%d', got '%d' for pattern '%s' and text '%s' with flags '%d'",
-			expect.soffset, actual.soffset, curr.pattern, curr.text, curr.flags
-		);
+    ck_assert_msg(expect.soffset == actual.soffset,
+        "Matching returned incorrect soffset: expected '%d', got '%d' for pattern '%s' and text '%s' with flags '%d'",
+		expect.soffset, actual.soffset, curr.pattern, curr.text, curr.flags
+	);
 
-		ck_assert_msg(expect.eoffset == actual.eoffset,
-			"Matching returned incorrect eoffset: expected '%d', got '%d' for pattern '%s' and text '%s' with flags '%d'",
-			expect.eoffset, actual.eoffset, curr.pattern, curr.text, curr.flags
-		);
-	}
+	ck_assert_msg(expect.eoffset == actual.eoffset,
+		"Matching returned incorrect eoffset: expected '%d', got '%d' for pattern '%s' and text '%s' with flags '%d'",
+		expect.eoffset, actual.eoffset, curr.pattern, curr.text, curr.flags
+	);
 }
 END_TEST
 

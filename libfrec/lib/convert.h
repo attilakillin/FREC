@@ -10,7 +10,7 @@
  * Returns REG_OK if the conversion is successful, REG_BADPAT if the
  * given wcs string is malformed, and REG_ESPACE on memory errors.
  */
-int convert_wcs_to_mbs(const wchar_t *wcs, size_t wn, char **mbs, size_t *mn);
+int convert_wcs_to_mbs(const wchar_t *wcs, ssize_t wn, char **mbs, ssize_t *mn);
 
 /*
  * Converts a string in multibyte representation (mbs) with a length
@@ -19,6 +19,6 @@ int convert_wcs_to_mbs(const wchar_t *wcs, size_t wn, char **mbs, size_t *mn);
  * Returns REG_OK if the conversion is successful, REG_BADPAT if the
  * given mbs string is malformed, and REG_ESPACE on memory errors.
  */
-int convert_mbs_to_wcs(const char *mbs, size_t mn, wchar_t **wcs, size_t *wn);
+int convert_mbs_to_wcs(const char *mbs, ssize_t mn, wchar_t **wcs, ssize_t *wn);
 
 #endif

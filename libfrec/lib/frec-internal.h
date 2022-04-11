@@ -5,7 +5,7 @@
 #include <wchar.h>
 #include <frec.h>
 
-#include "boyer-moore.h"
+#include "bm.h"
 #include "heuristic.h"
 
 // TODO I really wish to remove these
