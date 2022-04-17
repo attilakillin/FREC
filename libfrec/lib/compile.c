@@ -30,7 +30,6 @@
 #include <wchar.h>
 
 #include "bm.h"
-#include "convert.h"
 #include "frec-internal.h"
 #include "wu-manber.h"
 
@@ -121,32 +120,20 @@ frec_compile(frec_t *frec, string pattern, int cflags)
     return (REG_OK);
 }
 
-/*
- * Given an mregex_t struct and k patterns with given lengths, compile a
- * usual NFA struct (supplied by the underlying library), a Boyer-Moore
- * fast text searching struct, and a custom heuristic struct for each pattern.
- * Additional flags may be supplied using the cflags parameter.
- *
- * Given a newly allocated mfrec_t struct, this method fills all
- * its compilation-related fields.
- */
-/*
 int
-frec_mcompile(mfrec_t *mfrec, size_t k,
-    const wchar_t **patterns, size_t *lens, int cflags)
-{
-    mfrec->patterns = malloc(sizeof(frec_t) * k);
+frec_mcompile(mfrec_t *mfrec, const string *patterns, ssize_t n, int cflags) {
+    mfrec->patterns = malloc(sizeof(frec_t) * n);
     if (mfrec->patterns == NULL) {
         return (REG_ESPACE);
     }
-    mfrec->k = k;
+
+    mfrec->k = n;
     mfrec->cflags = cflags;
     mfrec->searchdata = NULL; // TODO Bad name :(
 
     // Compile each pattern.
-    for (size_t i = 0; i < k; i++) {
-        int ret = frec_compile(
-            &mfrec->patterns[i], patterns[i], lens[i], cflags);
+    for (ssize_t i = 0; i < n; i++) {
+        int ret = frec_compile(&mfrec->patterns[i], patterns[i], cflags);
         // On error, we record the index of the bad pattern.
         if (ret != REG_OK) {
             mfrec->err = i;
@@ -155,29 +142,30 @@ frec_mcompile(mfrec_t *mfrec, size_t k,
     }
 
     // If there's only one pattern, return early.
-    if (k == 1) {
+    if (n == 1) {
         mfrec->type = MHEUR_SINGLE;
         return (REG_OK);
     }
 
     // Set the heuristic type based on the compilation flags.
     if (cflags & REG_LITERAL) {
+        // If the REG_LITERAL flag is set, use literal heuristics.
+
         mfrec->type = MHEUR_LITERAL;
-    } else if (cflags & REG_NEWLINE) {
-        // TODO I Don't yet understand this case.
-        mfrec->type = MHEUR_LONGEST;
     } else {
-        // If not explicitly marked, check if all patterns can be
-        // matched either literally, or with the HEUR_LONGEST heuristic.
-        // If not, we can't speed up the multiple pattern matcher.
-        for (size_t i = 0; i < k; i++) {
+        // Else we'll use longest heuristics with one exception.
+        // If there's a pattern with an empty Boyer Moore and an empty
+        // heuristic struct, we can't use any multi-pattern heuristics.
+
+        for (ssize_t i = 0; i < n; i++) {
             frec_t *curr = &mfrec->patterns[i];
-            if (curr->boyer_moore == NULL && 
-                (curr->heuristic == NULL || curr->heuristic->heur_type != HEUR_LONGEST)) {
-                    mfrec->type = MHEUR_NONE;
-                    return (REG_OK);
-                }
+            bool no_heur = curr->boyer_moore == NULL || curr->heuristic == NULL;
+            if (no_heur) {
+                mfrec->type = MHEUR_NONE;
+                return (REG_OK);
+            }
         }
+
         mfrec->type = MHEUR_LONGEST;
     }
 
@@ -188,15 +176,19 @@ frec_mcompile(mfrec_t *mfrec, size_t k,
     }
     wumanber->cflags = cflags;
 
+    // TODO Uncomment remaining parts
+    return (REG_OK);
+}
+    /*
     // If the heuristic type was literal, we'll use the patterns as-is.
     if (mfrec->type == MHEUR_LITERAL) {
-        int ret = frec_wmcomp(wumanber, k, patterns, lens, cflags);
+        int ret = frec_wmcomp(wumanber, patterns, n, cflags);
         if (ret != REG_OK) {
             // TODO Free mfrec, wumanber
             return ret;
         }
     } else {
-        // Otherwise we'll assemble the patterns from the Boyer-Moore
+        // Otherwise, we'll assemble the patterns from the Boyer-Moore
         // or the heuristic compilation phase.
         const wchar_t **pat_ptrs = malloc(sizeof(wchar_t *) * k);
         if (pat_ptrs == NULL) {

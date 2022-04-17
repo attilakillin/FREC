@@ -17,10 +17,10 @@ typedef struct frec_t {
 } frec_t;
 
 typedef struct mfrec_t {
-	size_t k;		/* Number of patterns */
 	frec_t *patterns;	/* regex_t structure for each pattern */
+	size_t k;		/* Number of patterns */
 	int type;		/* XXX (private) Matching type */
-	int err;		/* XXX (private) Which pattern failed */
+	ssize_t err;		/* XXX (private) Which pattern failed */
 	int cflags;		/* XXX (private) cflags */
 	void *searchdata;	/* Wu-Manber internal data */
 } mfrec_t;

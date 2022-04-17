@@ -27,11 +27,10 @@
 #include <frec-config.h>
 #include <string-type.h>
 #include <string.h>
-#include <stdio.h>
 
 #include "bm.h"
 
-/* Utility functions. */
+// Utility functions.
 static ssize_t max(ssize_t a, ssize_t b) { return (a > b) ? a : b; }
 static ssize_t min(ssize_t a, ssize_t b) { return (a < b) ? a : b; }
 

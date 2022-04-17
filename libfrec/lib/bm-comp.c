@@ -245,7 +245,7 @@ bm_compile_literal(bm_comp *comp, string patt, int cflags)
         return (REG_OK);
     }
 
-    /* The options set by these flags won't work if MB_CUR_MAX > 1. */
+    // The options set by these flags won't work if MB_CUR_MAX > 1.
     if (comp->is_icase_set && MB_CUR_MAX > 1) {
         return (REG_BADPAT);
     }
@@ -280,13 +280,13 @@ strip_specials(string str, string *out_str, int in_flags, bm_comp *comp)
 {
 	ssize_t len = str.len;
 
-	/* If the first character is ^, set the given flag and continue. */
+	// If the first character is ^, set the given flag and continue.
 	if (string_has_char_at(str, 0, '^', L'^')) {
 		comp->has_bol_anchor = true;
         string_offset(&str, 1);
 	}
 
-	/* If the last character is a $ with special meaning, do the same. */
+	// If the last character is a $ with special meaning, do the same.
 	if (
         (len >= 1 && string_has_char_at(str, len - 1, '$', L'$'))
         && (len == 1 || string_has_char_at(str, len - 2, '\\', L'\\'))
@@ -299,7 +299,7 @@ strip_specials(string str, string *out_str, int in_flags, bm_comp *comp)
 	parser.escaped = false;
 	parser.extended = in_flags & REG_EXTENDED;
 
-	/* Traverse the given pattern: */
+	// Traverse the given pattern:
 	for (ssize_t i = 0; i < len; i++) {
         parse_result result;
         if (str.is_wide) {
@@ -317,13 +317,13 @@ strip_specials(string str, string *out_str, int in_flags, bm_comp *comp)
 				break;
 			case SHOULD_SKIP:
 				break;
-			/* If any special character was found, we abort. */
+			// If any special character was found, we abort.
 			default:
 				return (REG_BADPAT);
 		}
 	}
 
-	/* End the pattern with terminating null character and set length. */
+	// End the pattern with terminating null character and set length.
     string_null_terminate(out_str);
 
 	return (REG_OK);
@@ -338,6 +338,9 @@ bm_compile_full(bm_comp *comp, string patt, int cflags)
     if (!success) {
         return (REG_ESPACE);
     }
+
+    // Set the length to zero so that the string_append functions work properly.
+    // Its capacity is still patt.len, which has to be enough.
     clean_pattern.len = 0;
 
     int ret = strip_specials(patt, &clean_pattern, cflags, comp);

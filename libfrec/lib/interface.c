@@ -32,7 +32,6 @@
 
 #include "bm-type.h"
 #include "compile.h"
-#include "convert.h"
 #include "heuristic.h"
 #include "match.h"
 #include "frec-internal.h"
@@ -98,107 +97,60 @@ frec_regfree(frec_t *preg)
 	_dist_regfree(&preg->original);
 }
 
-typedef struct regexec_state {
-	const void *preg;
-	const void *str;
-	size_t len;
-	size_t nmatch;
-	frec_match_t *pmatch;
-	int cflags;
-	int eflags;
-	int type;
-
-	size_t slen;
-	size_t offset;
-} regexec_state;
-
-inline static void init_state(regexec_state *state, const void *preg,
-    const void *str, size_t len, size_t nmatch, frec_match_t pmatch[],
-    int cflags, int eflags, int type)
-{
-
-	state->preg = preg;
-	state->str = str;
-	state->len = len;
-	state->nmatch = nmatch;
-	state->pmatch = pmatch;
-	state->cflags = cflags;
-	state->eflags = eflags;
-	state->type = type;
-
-	state->slen = 0;
-	state->offset = 0;
-}
-
-inline static void calc_offsets_pre(regexec_state *state)
-{
-
-	if (state->type == STR_WIDE)
-		state->slen = (state->len == (size_t)-1)
-		    ? wcslen((const wchar_t *)state->str) : state->len;
-	else
-		state->slen = (state->len == (size_t)-1)
-		    ? strlen((const char *)state->str) : state->len;
-	state->offset = 0;
-
-	if (state->eflags & REG_STARTEND) {
-		state->offset += state->pmatch[0].soffset;
-		state->slen -= state->offset;
-	}
-	DEBUG_PRINTF("search offsets %ld - %ld", state->offset,
-	    state->offset + state->slen);
-}
-
-inline static void calc_offsets_post(regexec_state *state)
-{
-
-	if ((state->eflags & REG_STARTEND) && !(state->cflags & REG_NOSUB))
-		for (size_t i = 0; i < state->nmatch; i++) {
-			state->pmatch[i].soffset += (ssize_t) state->offset;
-			state->pmatch[i].soffset += (ssize_t) state->offset;
-			DEBUG_PRINTF("pmatch[%zu] offsets %d - %d", i,
-			    state->pmatch[i].soffset, state->pmatch[i].soffset);
-		}
-}
-
-inline static int
-_regexec(const void *preg, const void *str, size_t len,
+static int
+execute_match(const void *preg, string text,
     size_t nmatch, frec_match_t pmatch[], int eflags, int type, bool multi)
 {
-	regexec_state state;
-	int ret;
-	int cflags = multi ? ((const mfrec_t *)preg)->cflags
-	    : ((const frec_t *)preg)->cflags;
+    // Handle REG_STARTEND and optional start and end offsets.
+    ssize_t offset_start = 0;
+    ssize_t offset_end = text.len;
 
-	init_state(&state, preg, str, len, nmatch, pmatch, cflags, eflags, type);
-	calc_offsets_pre(&state);
-	if ((state.eflags & REG_STARTEND) && (state.pmatch[0].soffset > state.pmatch[0].eoffset))
-		return (REG_NOMATCH);
-	if (multi)
-		ret = oldfrec_mmatch(&((const wchar_t *)state.str)[state.offset],
-		    state.slen, state.type, state.nmatch, state.pmatch,
-		    state.eflags, state.preg);
-	else {
-        string text;
-        string_borrow(&text, str, (ssize_t) len, type == STR_WIDE);
-        string_offset(&text, (ssize_t) state.offset);
-		ret = frec_match(state.pmatch, state.nmatch, state.preg, text, eflags);
+    if (eflags & REG_STARTEND) {
+        offset_start = pmatch[0].soffset;
+        offset_end = pmatch[0].eoffset;
+    }
 
-		string_free(&text);
-	}
-	if (ret == REG_OK)
-		calc_offsets_post(&state);
-	DEBUG_PRINTF("returning %d", ret);
+    if (offset_start >= offset_end) {
+        return (REG_NOMATCH);
+    }
+
+    string_offset(&text, offset_start);
+    text.len = offset_end - offset_start;
+
+    bool nosub_not_set = true;
+
+    // Execute matching.
+    int ret;
+    if (multi) {
+        nosub_not_set = (((mfrec_t *)preg)->cflags & REG_NOSUB) == 0;
+        // TODO Fix this call
+        ret = oldfrec_mmatch(text.wide, text.len, type, nmatch, pmatch, eflags, preg);
+    } else {
+        nosub_not_set = (((frec_t *)preg)->cflags & REG_NOSUB) == 0;
+        ret = frec_match(pmatch, nmatch, preg, text, eflags);
+    }
+
+    // Fix offsets that may have been messed up by REG_STARTEND.
+	if (ret == REG_OK) {
+        if (eflags & REG_STARTEND && nosub_not_set) {
+            for (ssize_t i = 0; i < nmatch && pmatch[i].soffset != -1; i++) {
+                pmatch[i].soffset += offset_start;
+                pmatch[i].eoffset += offset_start;
+            }
+        }
+    }
+
 	return ret;
-
 }
 
 int
 frec_regnexec(const frec_t *preg, const char *str, size_t len,
     size_t nmatch, frec_match_t pmatch[], int eflags)
 {
-	int type = (MB_CUR_MAX == 1) ? STR_BYTE : STR_MBS;
-	return _regexec(preg, str, len, nmatch, pmatch, eflags, type, false);
+    string text;
+    string_borrow(&text, str, (ssize_t) len, false);
+
+	return execute_match(preg, text, nmatch, pmatch, eflags, STR_BYTE, false);
 }
 
 int
@@ -214,7 +166,10 @@ int
 frec_regwnexec(const frec_t *preg, const wchar_t *str, size_t len,
     size_t nmatch, frec_match_t pmatch[], int eflags)
 {
-	return _regexec(preg, str, len, nmatch, pmatch, eflags, STR_WIDE, false);
+    string text;
+    string_borrow(&text, str, (ssize_t) len, true);
+
+	return execute_match(preg, text, nmatch, pmatch, eflags, STR_WIDE, false);
 }
 
 int
@@ -228,183 +183,129 @@ frec_regwexec(
 
 
 int
-frec_mregncomp(mfrec_t *preg, size_t nr, const char **regex,
-    size_t *n, int cflags)
-{
-	int ret = REG_NOMATCH;
-	const wchar_t **wr;
-	wchar_t **wregex = NULL;
-	size_t *wlen = NULL;
-	size_t i = 0;
+frec_mregncomp(
+    mfrec_t *preg, size_t nr,
+    const char **regex, size_t *n, int cflags
+) {
+    string *patterns = malloc(sizeof(string) * nr);
+    if (patterns == NULL) {
+        return (REG_ESPACE);
+    }
 
-	DEBUG_PRINT("enter");
+    for (ssize_t i = 0; i < nr; i++) {
+        string_borrow(&patterns[i], regex[i], (ssize_t) n[i], false);
+    }
 
-	wregex = malloc(nr * sizeof(wchar_t *));
-	if (!wregex) {
-		DEBUG_PRINT("returning REG_ESPACE");
-		return (REG_ESPACE);
-	}
-	wlen = malloc(nr * sizeof(size_t));
-	if (!wlen)
-		goto err;
+	int ret = frec_mcompile(preg, patterns, (ssize_t) nr, cflags);
 
-	for (i = 0; i < nr; i++) {
-		ret = convert_mbs_to_wcs(regex[i], n[i], &wregex[i], &wlen[i]);
-		if (ret != REG_OK)
-			goto err;
-	}
-
-	wr = (const wchar_t **)wregex;
-	//ret = frec_mcompile(preg, nr, wr, wlen, cflags);
-
-err:
-	if (wregex) {
-		for (size_t j = 0; j < i; j++)
-			if (wregex[j])
-				free(wregex[j]);
-	}
-	if (wlen)
-		free(wlen);
-	DEBUG_PRINTF("returning %d", ret);
-	return ret;
+    free(patterns);
+    return ret;
 }
 
 int
 frec_mregcomp(mfrec_t *preg, size_t nr, const char **regex, int cflags)
 {
-	int ret;
-	size_t *len;
-
-	DEBUG_PRINT("enter");
-
-	len = malloc(nr * sizeof(size_t));
-	if (!len) {
-		DEBUG_PRINT("returning REG_ESPACE");
-		return REG_ESPACE;
+	size_t *lens = malloc(sizeof(size_t) * nr);
+	if (lens == NULL) {
+		return (REG_ESPACE);
 	}
 
-	for (size_t i = 0; i < nr; i++)
-		len[i] = strlen(regex[i]);
+	for (ssize_t i = 0; i < nr; i++) {
+        lens[i] = strlen(regex[i]);
+    }
 
-	ret = frec_mregncomp(preg, nr, regex, len, cflags);
-	free(len);
-	DEBUG_PRINTF("returning %d", ret);
-	return (ret);
-}
+	int ret = frec_mregncomp(preg, nr, regex, lens, cflags);
 
-
-int
-frec_mregwncomp(mfrec_t *preg, size_t nr, const wchar_t **regex,
-    size_t *n, int cflags)
-{
-	int ret = REG_NOMATCH;
-	const char **sr;
-	char **sregex = NULL;
-	size_t *slen = NULL;
-	size_t i = 0;
-
-	DEBUG_PRINT("enter");
-
-	sregex = malloc(nr * sizeof(char *));
-	if (!sregex) {
-		DEBUG_PRINT("returning REG_ESPACE");
-		return REG_ESPACE;
-	}
-	slen = malloc(nr * sizeof(size_t));
-	if (!slen)
-		goto err;
-
-	for (i = 0; i < nr; i++) {
-		ret = convert_wcs_to_mbs(regex[i], n[i], &sregex[i], &slen[i]);
-		if (ret != REG_OK)
-			goto err;
-	}
-
-	sr = (const char **)sregex;
-	//ret = frec_mcompile(preg, nr, regex, n, cflags);
-
-err:
-	if (sregex) {
-		for (size_t j = 0; j < i; j++)
-			if (sregex[j])
-				free(sregex[j]);
-	}
-	if (slen)
-		free(slen);
-	DEBUG_PRINTF("returning %d", ret);
-	return (ret);
+    free(lens);
+	return ret;
 }
 
 int
-frec_mregwcomp(mfrec_t *preg, size_t nr, const wchar_t **regex,
-    int cflags)
+frec_mregwncomp(
+    mfrec_t *preg, size_t nr,
+    const wchar_t **regex, size_t *n, int cflags
+) {
+    string *patterns = malloc(sizeof(string) * nr);
+    if (patterns == NULL) {
+        return (REG_ESPACE);
+    }
+
+    for (ssize_t i = 0; i < nr; i++) {
+        string_borrow(&patterns[i], regex[i], (ssize_t) n[i], true);
+    }
+
+    int ret = frec_mcompile(preg, patterns, (ssize_t) nr, cflags);
+
+    free(patterns);
+	return ret;
+}
+
+int
+frec_mregwcomp(mfrec_t *preg, size_t nr, const wchar_t **regex, int cflags)
 {
-	int ret;
-	size_t *len;
+	size_t *lens = malloc(nr * sizeof(size_t));
+    if (lens == NULL) {
+        return (REG_ESPACE);
+    }
 
-	DEBUG_PRINT("enter");
+    for (ssize_t i = 0; i < nr; i++) {
+        lens[i] = wcslen(regex[i]);
+    }
 
-	len = malloc(nr * sizeof(size_t));
-	if (!len) {
-		DEBUG_PRINT("returning REG_ESPACE");
-		return REG_ESPACE;
-	}
+    int ret = frec_mregwncomp(preg, nr, regex, lens, cflags);
 
-	for (size_t i = 0; i < nr; i++)
-		len[i] = wcslen(regex[i]);
-
-	ret = frec_mregwncomp(preg, nr, regex, len, cflags);
-	free(len);
-	DEBUG_PRINTF("returning %d", ret);
-	return (ret);
+    free(lens);
+    return ret;
 }
 
 void
 frec_mregfree(mfrec_t *preg)
 {
+	if (preg != NULL) {
+        for (ssize_t i = 0; i < preg->k; i++) {
+            frec_regfree(&preg->patterns[i]);
+        }
 
-	DEBUG_PRINT("enter");
-
-	if (!preg) {
 		frec_wmfree(preg->searchdata);
-		free(preg);
 	}
 }
 
 int
-frec_mregnexec(const mfrec_t *preg, const char *str, size_t len,
-    size_t nmatch, frec_match_t pmatch[], int eflags)
-{
-	int type = (MB_CUR_MAX == 1) ? STR_BYTE : STR_MBS;
-	return _regexec(preg, str, len, nmatch, pmatch, eflags, type, true);
+frec_mregnexec(
+    const mfrec_t *preg, const char *str, size_t len,
+    size_t nmatch, frec_match_t pmatch[], int eflags
+) {
+    string text;
+    string_borrow(&text, str, (ssize_t) len, false);
+
+	return execute_match(preg, text, nmatch, pmatch, eflags, STR_BYTE, true);
 }
 
 int
-frec_mregexec(const mfrec_t *preg, const char *str,
-    size_t nmatch, frec_match_t pmatch[], int eflags)
-{
-	int ret = frec_mregnexec(preg, str, (size_t)-1, nmatch,
-	    pmatch, eflags);
-	DEBUG_PRINTF("returning %d", ret);
-	return ret;
-}
-
-
-int
-frec_mregwnexec(const mfrec_t *preg, const wchar_t *str, size_t len,
-    size_t nmatch, frec_match_t pmatch[], int eflags)
-{
-	return _regexec(preg, str, len, nmatch, pmatch, eflags, STR_WIDE, true);
+frec_mregexec(
+    const mfrec_t *preg, const char *str,
+    size_t nmatch, frec_match_t pmatch[], int eflags
+) {
+	return frec_mregnexec(preg, str, strlen(str), nmatch, pmatch, eflags);
 }
 
 int
-frec_mregwexec(const mfrec_t *preg, const wchar_t *str,
-    size_t nmatch, frec_match_t pmatch[], int eflags)
-{
+frec_mregwnexec(
+    const mfrec_t *preg, const wchar_t *str, size_t len,
+    size_t nmatch, frec_match_t pmatch[], int eflags
+) {
+    string text;
+    string_borrow(&text, str, (ssize_t) len, false);
 
-	int ret = frec_mregwnexec(preg, str, (size_t)-1, nmatch, pmatch, eflags);
-	DEBUG_PRINTF("returning %d", ret);
-	return ret;
+	return execute_match(preg, text, nmatch, pmatch, eflags, STR_WIDE, true);
+}
+
+int
+frec_mregwexec(
+    const mfrec_t *preg, const wchar_t *str,
+    size_t nmatch, frec_match_t pmatch[], int eflags
+) {
+	return frec_mregwnexec(preg, str, wcslen(str), nmatch, pmatch, eflags);
 }
 
 size_t

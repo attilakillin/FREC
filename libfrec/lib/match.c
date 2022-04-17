@@ -92,11 +92,14 @@ match_heuristic(
             ret = match_original(result, nmatch, orig, section, eflags);
 
             // If we found a match, break out of the while loop.
+            // The match was found relative to glob_offset + start.
             if (ret == REG_OK) {
+                glob_offset += start;
                 break;
             }
 
             // Else modify the offsets and continue with the rest of the text.
+            // No match was found before end, so we can shift the offset by it.
             string_offset(&text, end);
             glob_offset += end;
         }
