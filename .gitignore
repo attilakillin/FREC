@@ -19,6 +19,8 @@ autom4te.cache/
 **/Makefile
 **/Makefile.in
 !benchmark/**/Makefile
+# TODO Legacy folder, keep until cleanup
+!benchmark-old/**/Makefile
 
 # Ignore C object files
 **.o

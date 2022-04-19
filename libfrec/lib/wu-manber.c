@@ -83,7 +83,7 @@ procwm(const void **pat_arr, size_t *siz_arr, size_t nr, size_t chsiz, void *sh,
 		/* First fragment, treat special because it is a prefix */
 		r = hashtable_get(sh, PAT_ARR(i, 0), entry);
 		shift = *m - WM_B;
-		switch (ret) {
+		switch (r) {
 		case HASH_NOTFOUND:
 			entry->shift = shift;
 			entry->suff = 0;
