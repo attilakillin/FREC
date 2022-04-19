@@ -1,7 +1,7 @@
 #ifndef LIBFREC_CONFIG_H
 #define LIBFREC_CONFIG_H 1
 
-#include <tre/regex.h>
+#include <tre/tre.h>
 
 #define _dist_regcomp	tre_regcomp
 #define _dist_regncomp	tre_regncomp

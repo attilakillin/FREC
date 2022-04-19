@@ -1,8 +1,25 @@
 
-#include <frec.h>
-#include <regex.h>
-#include <tre/tre.h>
+#ifdef USE_FREC
+    #include <frec.h>
+#endif
+
+#ifdef USE_POSIX
+    #include <regex.h>
+#endif
+
+#ifdef USE_TRE
+    #include <tre/tre.h>
+#endif
+
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <err.h>
+#include <fcntl.h>
 #include <getopt.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define ERROR_BUFFER_SIZE 512
 
@@ -67,7 +84,7 @@ main(int argc, char *argv[])
         char buffer[ERROR_BUFFER_SIZE + 1];
 
         #ifdef USE_FREC
-            frec_regerror(ret, &preg, buffer, ERROR_BUFFER_SIZE);
+            // TODO No suitable frec_regerror is present currently.
         #endif
 
         #ifdef USE_POSIX
@@ -93,13 +110,11 @@ main(int argc, char *argv[])
         errx(2, "Invalid file: %s", *argv);
     }
 
-    int map_flags = MAP_PRIVATE | MAP_NOCORE | MAP_NOSYNC;
+    int map_flags = MAP_PRIVATE;
     char *buffer = mmap(NULL, st.st_size, PROT_READ, map_flags, file, 0);
     if (buffer == MAP_FAILED) {
         errx(2, "Invalid file buffer from file: %s", *argv);
     }
-
-    madvise(buffer, st.st_size, MADV_SEQUENTIAL);
 
     // Execute regex matching.
     int start = 0;
@@ -115,7 +130,7 @@ main(int argc, char *argv[])
 
         #ifdef USE_POSIX
             regmatch_t pmatch;
-            ret = frec_regexec(&preg, text_offset, 1, &pmatch, eflags);
+            ret = regexec(&preg, text_offset, 1, &pmatch, eflags);
         #endif
 
         #ifdef USE_TRE
@@ -133,7 +148,7 @@ main(int argc, char *argv[])
             char buffer[ERROR_BUFFER_SIZE + 1];
 
             #ifdef USE_FREC
-                frec_regerror(ret, &preg, buffer, ERROR_BUFFER_SIZE);
+                // TODO No suitable frec_regerror is present currently.
             #endif
 
             #ifdef USE_POSIX
@@ -154,13 +169,13 @@ main(int argc, char *argv[])
         #endif
 
         #ifdef USE_POSIX
-            printf("(%ld %ld)\n", start + pmatch.rm_so, start + pmatch.rm_eo);
-            start += pmatch.eoffset;
+            printf("(%d %d)\n", start + pmatch.rm_so, start + pmatch.rm_eo);
+            start += pmatch.rm_eo;
         #endif
 
         #ifdef USE_TRE
-            printf("(%ld %ld)\n", start + pmatch.rm_so, start + pmatch.rm_eo);
-            start += pmatch.eoffset;
+            printf("(%d %d)\n", start + pmatch.rm_so, start + pmatch.rm_eo);
+            start += pmatch.rm_eo;
         #endif
     }
 
