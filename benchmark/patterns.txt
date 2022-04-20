@@ -1,0 +1,4 @@
+pattern
+something
+email@email.com
+text to look for

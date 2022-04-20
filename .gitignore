@@ -33,6 +33,7 @@ benchmark/**
 !benchmark/**/
 !benchmark/**/*.c
 !benchmark/**/*.sh
+!benchmark/**/*.txt
 !benchmark/**/Makefile
 
 # Ignore all test files and reinclude the makefile and the source files
