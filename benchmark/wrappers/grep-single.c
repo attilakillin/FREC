@@ -1,14 +1,29 @@
 
 #ifdef USE_FREC
     #include <frec.h>
+
+    #define preg_t frec_t
+    #define match_t frec_match_t
+    #define regcomp_func frec_regcomp
+    #define regerror_func frec_regerror
 #endif
 
 #ifdef USE_POSIX
     #include <regex.h>
+
+    #define preg_t regex_t
+    #define match_t regmatch_t
+    #define regcomp_func regcomp
+    #define regerror_func regerror
 #endif
 
 #ifdef USE_TRE
     #include <tre/tre.h>
+
+    #define preg_t regex_t
+    #define match_t regmatch_t
+    #define regcomp_func tre_regcomp
+    #define regerror_func tre_regerror
 #endif
 
 #include <sys/mman.h>
@@ -61,40 +76,17 @@ main(int argc, char *argv[])
         exit(2);
     }
 
-    // Compile pattern.
+    // Compile pattern using variant-specific macros.
     int ret;
 
-    #ifdef USE_FREC
-        frec_t preg;
-        ret = frec_regcomp(&preg, pattern, cflags);
-    #endif
-
-    #ifdef USE_POSIX
-        regex_t preg;
-        ret = regcomp(&preg, pattern, cflags);
-    #endif
-
-    #ifdef USE_TRE
-        regex_t preg;
-        ret = tre_regcomp(&preg, pattern, cflags);
-    #endif
+    preg_t preg;
+    ret = regcomp_func(&preg, pattern, cflags);
 
     // Handle potential errors.
     if (ret != 0) {
         char buffer[ERROR_BUFFER_SIZE + 1];
 
-        #ifdef USE_FREC
-            // TODO No suitable frec_regerror is present currently.
-        #endif
-
-        #ifdef USE_POSIX
-            regerror(ret, &preg, buffer, ERROR_BUFFER_SIZE);
-        #endif
-
-        #ifdef USE_TRE
-            tre_regerror(ret, &preg, buffer, ERROR_BUFFER_SIZE);
-        #endif
-
+        regerror_func(ret, &preg, buffer, ERROR_BUFFER_SIZE);
         errx(2, "%s : %s", pattern, buffer);
     }
 
@@ -123,19 +115,18 @@ main(int argc, char *argv[])
         char *text_offset = &buffer[start];
         ssize_t text_len = st.st_size - start;
 
+        match_t pmatch;
+
         #ifdef USE_FREC
-            frec_match_t pmatch;
-            ret = frec_regnexec(&preg, text_offset, text_len, 1, &pmatch, eflags);
+           ret = frec_regnexec(&preg, text_offset, text_len, 1, &pmatch, eflags);
         #endif
 
         #ifdef USE_POSIX
-            regmatch_t pmatch;
             ret = regexec(&preg, text_offset, 1, &pmatch, eflags);
         #endif
 
         #ifdef USE_TRE
-            regmatch_t pmatch;
-            ret = tre_regnexec(&preg, text_offset, text_len, 1, &pmatch, eflags);
+           ret = tre_regnexec(&preg, text_offset, text_len, 1, &pmatch, eflags);
         #endif
 
         // If no more matches were found, break.
@@ -147,18 +138,7 @@ main(int argc, char *argv[])
         if (ret != 0) {
             char buffer[ERROR_BUFFER_SIZE + 1];
 
-            #ifdef USE_FREC
-                // TODO No suitable frec_regerror is present currently.
-            #endif
-
-            #ifdef USE_POSIX
-                regerror(ret, &preg, buffer, ERROR_BUFFER_SIZE);
-            #endif
-
-            #ifdef USE_TRE
-                tre_regerror(ret, &preg, buffer, ERROR_BUFFER_SIZE);
-            #endif
-
+            regerror_func(ret, &preg, buffer, ERROR_BUFFER_SIZE);
             errx(2, "%s", buffer);
         }
 
@@ -166,14 +146,7 @@ main(int argc, char *argv[])
         #ifdef USE_FREC
             printf("(%ld %ld)\n", start + pmatch.soffset, start + pmatch.eoffset);
             start += pmatch.eoffset;
-        #endif
-
-        #ifdef USE_POSIX
-            printf("(%d %d)\n", start + pmatch.rm_so, start + pmatch.rm_eo);
-            start += pmatch.rm_eo;
-        #endif
-
-        #ifdef USE_TRE
+        #else
             printf("(%d %d)\n", start + pmatch.rm_so, start + pmatch.rm_eo);
             start += pmatch.rm_eo;
         #endif

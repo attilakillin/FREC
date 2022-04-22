@@ -180,6 +180,13 @@ frec_regwexec(
 	return frec_regwnexec(preg, str, wcslen(str), nmatch, pmatch, eflags);
 }
 
+size_t
+frec_regerror(
+    int errcode, const frec_t *preg, char *errbuf, size_t errbuf_size
+) {
+    return _dist_regerror(errcode, &preg->original, errbuf, errbuf_size);
+}
+
 
 
 int

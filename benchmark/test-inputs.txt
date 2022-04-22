@@ -1,0 +1,6 @@
+abc
+literal
+very long literal text that has to be matched
+[Ll]ongest
+prefix+
+no \n optimization .*

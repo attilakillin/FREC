@@ -36,6 +36,7 @@ int frec_mregwexec(const struct mfrec_t *preg, const wchar_t *text, size_t nmatc
 int frec_mregwnexec(const struct mfrec_t *preg, const wchar_t *text, size_t len, size_t nmatch, struct frec_match_t *pmatch, int eflags);
 
 /* Multi-pattern error reporting function. */
+size_t frec_regerror(int errcode, const struct frec_t *preg, char *errbuf, size_t errbuf_size);
 size_t frec_mregerror(int errcode, const struct mfrec_t *preg, int *errpatn, char *errbuf, size_t errbuf_size);
 
 /* Memory deallocation functions. */

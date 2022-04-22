@@ -80,9 +80,10 @@ compare_outputs() {
 # Two base filenames have to supplied, these will be extended by -frec,
 # -posix, or -tre depending on the variant.
 # Parameters: $1: The base filename of the grep executables.
-# Parameters: $2: The pattern to use for the search.
+#             $2: The pattern to use for the search.
 #             $3: The file to search in.
 #             $4: The base filename where the output will be written.
+# Returns: The return value of the compare_outputs command.
 benchmark_with() {
     echo "> Running benchmarks... | \"$2\" | $3 |"
 
@@ -97,13 +98,46 @@ benchmark_with() {
     compare_outputs "$4-frec" "$4-posix" "$4-tre"
 }
 
+# Benchmark all three variants with patterns read from the given file.
+# The base executable filename will be extended by -frec, -posix, or -tre
+# depending on the variant.
+# Parameters: $1: The base filename of the grep executables.
+#             $2: The pattern file to read line-by-line for benchmarking.
+#             $3: The text file to search in.
+#             $4: The folder where the output files will be placed.
+benchmark_from_file() {
+    echo "> Reading test input file for benchmarks..."
 
-# Rebuild variants in the wrappers folder.
-make_executables ./wrappers
-# Concatenate the source files of the library 500 times.
-generate_file "../libfrec/lib/*.c" ./patterns.txt 500 ./generated
+    i=0
+    success=0
+
+    while read -r line; do
+        benchmark_with "$1" "$line" "$3" "$4/out-$i"
+
+        if [ $? -eq 0 ]; then
+            success=$(($success+1))
+        fi
+
+        i=$(($i+1))
+    done < "$2"
+
+    echo "> Benchmarking finished, outputs matched for $success/$i tests."
+}
+
+
+
+while getopts "gm" opt; do
+    case $opt in
+        g)
+            # Concatenate the source files of the library 500 times.
+            generate_file "../libfrec/lib/*.c" ./extra-patterns.txt 500 ./generated
+            ;;
+        m)
+            # Rebuild variants in the wrappers folder.
+            make_executables ./wrappers
+            ;;
+    esac
+done
+
 # Run each variant with specific patterns on the above file.
-benchmark_with ./wrappers/grep "literal" ./generated ./out-literal
-benchmark_with ./wrappers/grep "[Ll]ongest" ./generated ./out-longest
-benchmark_with ./wrappers/grep "prefix+" ./generated ./out-prefix
-benchmark_with ./wrappers/grep "no \n optimization .*" ./generated ./out-none
+benchmark_from_file ./wrappers/grep ./test-inputs.txt ./generated ./work
