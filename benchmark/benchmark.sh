@@ -27,6 +27,7 @@ generate_file() {
     > $4
 
     j=1
+    lines=`wc -l < $2`
 
     i=0
     end=$3
@@ -36,6 +37,7 @@ generate_file() {
             sed -n "${j}p" $2 >> $4
         done
         i=$(($i+1))
+        j=$(( $j % $lines + 1 ))
     done
 
     printf " Done.\n"
