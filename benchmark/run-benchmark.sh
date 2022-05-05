@@ -67,18 +67,10 @@ benchmark_with() {
 echo "> Reading test input file for benchmarks..."
 
 i=1
-success=0
-
 # Read each pattern from the patterns file
 while read -r line; do
     # And run a benchmark with it
     benchmark_with "$exec_base" "$line" "$text" "$out_folder/out-$i" "$flavors"
-
-    # Maintain number of successes
-    if [ $? -eq 0 ]; then
-        success=$(($success+1))
-    fi
-
     i=$(($i+1))
 done < "$patterns"
 
