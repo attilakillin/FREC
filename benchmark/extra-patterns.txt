@@ -1,5 +1,0 @@
-pattern
-something
-email@email.com
-text to look for
-very long literal text that has to be matched

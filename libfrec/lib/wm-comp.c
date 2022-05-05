@@ -1,5 +1,6 @@
 #include <frec-config.h>
 #include "wm-comp.h"
+#include "wm-type.h"
 
 #define WM_B 2
 
@@ -30,5 +31,12 @@ wm_compile(wm_comp *comp, string *patterns, ssize_t count, int cflags)
     comp->shift = hashtable_init(elem_count, size, sizeof(wm_entry));
     if (comp->shift == NULL) {
         return (REG_ESPACE);
+    }
+
+    // Stores the current entry.
+    wm_entry entry;
+
+    for (ssize_t i = 0; i < count; i++) {
+
     }
 }

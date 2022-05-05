@@ -57,7 +57,7 @@ fill_badc_shifts_stnd(bm_comp *comp)
 	ssize_t len = comp->pattern.len;
 	uint *table = comp->bad_shifts_stnd;
 
-	// For every character in the alphabet, set the shift to length + 1.
+	// For every character in the alphabet, set the shift to length.
 	for (size_t i = 0; i <= UCHAR_MAX; i++) {
 		table[i] = len;
 	}

@@ -130,10 +130,14 @@ exec_turbo_bm(
                     value = patt.len;
                 }
             } else {
-                value = comp->bad_shifts_stnd[text.stnd[srch_pos + i]];
+                char key = text.stnd[srch_pos + i];
+                // If the key is invalid (< 0), no pattern can match with it.
+                value = (key < 0)
+                    ? patt.len
+                    : comp->bad_shifts_stnd[key];
             }
 
-            ssize_t bad_shift = (int) value - v;
+            ssize_t bad_shift = value - v;
             
             shift = max(turbo_shift, bad_shift);
             shift = max(shift, comp->good_shifts[i]);

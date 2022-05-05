@@ -149,13 +149,13 @@ frec_match(
 ) {
     const regex_t *orig = &preg->original;
     bm_comp *bm = preg->boyer_moore;
-    heur *heur = preg->heuristic;
+    heur *hr = preg->heuristic;
 
     if (bm != NULL) {
         frec_match_t *result = (nmatch == 0) ? NULL : &pmatch[0];
         return bm_execute(result, bm, text, eflags);
-    } else if (heur != NULL) {
-        return match_heuristic(pmatch, nmatch, heur, orig, text, eflags);
+    } else if (hr != NULL) {
+        return match_heuristic(pmatch, nmatch, hr, orig, text, eflags);
     } else {
         return match_original(pmatch, nmatch, orig, text, eflags);
     }

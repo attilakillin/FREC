@@ -109,7 +109,7 @@ main(int argc, char *argv[])
     }
 
     // Execute regex matching.
-    int start = 0;
+    ssize_t start = 0;
     while (start < st.st_size) {
         // Only match on the remaining part.
         char *text_offset = &buffer[start];
@@ -147,7 +147,7 @@ main(int argc, char *argv[])
             printf("(%ld %ld)\n", start + pmatch.soffset, start + pmatch.eoffset);
             start += pmatch.eoffset;
         #else
-            printf("(%d %d)\n", start + pmatch.rm_so, start + pmatch.rm_eo);
+            printf("(%ld %ld)\n", start + pmatch.rm_so, start + pmatch.rm_eo);
             start += pmatch.rm_eo;
         #endif
     }
