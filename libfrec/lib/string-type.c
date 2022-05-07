@@ -150,3 +150,29 @@ string_null_terminate(string *str)
         str->stnd[str->len] = '\0';
     }
 }
+
+void *
+string_index(string *str, ssize_t at)
+{
+    if (str->is_wide) {
+        return &str->wide[at];
+    } else {
+        return &str->stnd[at];
+    }
+}
+
+int
+string_compare(
+    const string *str_a, ssize_t from_a,
+    const string *str_b, ssize_t from_b, ssize_t count
+) {
+    if (str_a->is_wide != str_b->is_wide) {
+        return -1;
+    }
+
+    if (str_a->is_wide) {
+        return memcmp(&str_a->wide[from_a], &str_b->wide[from_b], count);
+    } else {
+        return memcmp(&str_a->stnd[from_a], &str_b->stnd[from_b], count);
+    }
+}

@@ -1,4 +1,9 @@
+Car
 Hungary
+United States of America
+Something that doesn't match
 Slov[a-z][a-z]ia
 C[a-z]*a
-Something that doesn't match
+[Ll]ongest
+Prefix.*:
+[Pp]refix.*:

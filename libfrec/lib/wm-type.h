@@ -30,7 +30,7 @@ typedef struct wm_entry {
 } wm_entry;
 
 void
-wm_comp_init(wm_comp *comp, int cflags);
+wm_comp_init(wm_comp *comp, ssize_t count, int cflags);
 
 void
 wm_comp_free(wm_comp *comp);

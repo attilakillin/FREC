@@ -72,4 +72,11 @@ string_append_from(string *target, string src, ssize_t at);
 void
 string_null_terminate(string *str);
 
+void *
+string_index(string *str, ssize_t at);
+
+int
+string_compare(const string *str_a, ssize_t from_a,
+               const string *str_b, ssize_t from_b, ssize_t count);
+
 #endif // FREC_STRING_TYPE_H

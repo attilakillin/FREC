@@ -23,8 +23,8 @@ the following command:
 
     ./make-executables.sh ./wrappers
 
-The only prerequisite is building the FREC library from the root folder
-beforehand.
+The only prerequisites are downloading the TRE library and building the FREC
+library from the root folder beforehand.
 
 ## Generating or finding sample texts
 
@@ -35,7 +35,7 @@ also provided that can generate large text files.
 
 The `generate-text.sh` script can be used to concatenate files matching a given
 pattern a fixed number of times. With a high enough number of rounds, the output
-file is large enough to benchmark pattern matching in.
+file is large enough to be used for benchmarking tests.
 
 The script can be used with 3 or 4 arguments. With 3 arguments, the number of
 rounds, the input file pattern and the output file must be specified.
@@ -51,7 +51,7 @@ concatenation, a line from this file is read and inserted into the output file.
 
 ### Finding a large sample text file online
 
-The easiest way to find large files is to look at data dumps. For example, the
+The easiest way to find large files is to look for data dumps. For example, the
 [following page](https://dumps.wikimedia.org/enwiki/) contains download dumps
 for the entire content of Wikipedia.
 
@@ -77,7 +77,8 @@ The arguments in order:
 - The comma-separated list of flavors to benchmark.
 
 The output files will contain the start and end offset of each match the flavor
-has found. To compare these, use `compare-outputs.sh`, as seen below.
+has found, as well as the number of matches that were found.
+To compare these automatically, use `compare-outputs.sh`, as seen below.
 
 ## Comparing benchmark outputs
 
