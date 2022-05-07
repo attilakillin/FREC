@@ -12,7 +12,15 @@ int
 wm_compile(wm_comp *comp, string *patterns, ssize_t count, int cflags)
 {
     // Zero-initialize compilation struct.
-    wm_comp_init(comp, count, cflags);
+    bool success = wm_comp_init(comp, count, cflags);
+    if (!success) {
+        return (REG_ESPACE);
+    }
+
+    // Copy patterns to compilation struct
+    for (int i = 0; i < count; i++) {
+        string_duplicate(&comp->patterns[i], patterns[i]);
+    }
 
     // Find and set the shortest pattern length.
     ssize_t len_shortest = patterns[0].len;

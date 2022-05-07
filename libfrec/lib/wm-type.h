@@ -8,7 +8,7 @@
 #define WM_MAXPAT 64
 
 typedef struct wm_comp {
-    const string *patterns;  // Pattern array.
+    string *patterns;        // Pattern array.
     ssize_t count;           // Number of patterns.
 
     ssize_t len_shortest;    // Length of the shortest pattern.
@@ -29,7 +29,7 @@ typedef struct wm_entry {
     ssize_t prefix_cnt;
 } wm_entry;
 
-void
+bool
 wm_comp_init(wm_comp *comp, ssize_t count, int cflags);
 
 void

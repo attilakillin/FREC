@@ -232,12 +232,12 @@ fill_good_shifts(bm_comp *comp)
 	return res;
 }
 
-int
-bm_compile_literal(bm_comp *comp, string patt, int cflags)
+// Internal compile function without bm_comp_init call, as this init
+// function should only be called once, at the start of either
+// bm_compile_literal or bm_compile_full
+static int
+compile_literal(bm_comp *comp, string patt, int cflags)
 {
-    // Initialize compilation struct.
-    bm_comp_init(comp, cflags);
-
     // Return early if the pattern is a zero-length string.
     if (patt.len == 0) {
         string_borrow(&comp->pattern, NULL, 0, patt.is_wide);
@@ -271,6 +271,13 @@ bm_compile_literal(bm_comp *comp, string patt, int cflags)
 	return (REG_OK);
 }
 
+int
+bm_compile_literal(bm_comp *comp, string patt, int cflags)
+{
+    bm_comp_init(comp, cflags);
+    return compile_literal(comp, patt, cflags);
+}
+
 // Strips escape characters from the given str pattern and outputs the
 // literal text result into out_str.
 // Input flags can be specified in in_flags, while output flags are set in the
@@ -289,7 +296,7 @@ strip_specials(string str, string *out_str, int in_flags, bm_comp *comp)
 	// If the last character is a $ with special meaning, do the same.
 	if (
         (len >= 1 && string_has_char_at(str, len - 1, '$', L'$'))
-        && (len == 1 || string_has_char_at(str, len - 2, '\\', L'\\'))
+        && (len == 1 || !string_has_char_at(str, len - 2, '\\', L'\\'))
 	) {
 		comp->has_eol_anchor = true;
 		str.len--;
@@ -332,6 +339,8 @@ strip_specials(string str, string *out_str, int in_flags, bm_comp *comp)
 int
 bm_compile_full(bm_comp *comp, string patt, int cflags)
 {
+    bm_comp_init(comp, cflags);
+
 	// We'll execute literal preprocessing on a clean pattern.
     string clean_pattern;
     bool success = string_duplicate(&clean_pattern, patt);
@@ -350,7 +359,7 @@ bm_compile_full(bm_comp *comp, string patt, int cflags)
 	}
 
 	// Execute literal preprocessing.
-	ret = bm_compile_literal(comp, clean_pattern, cflags);
+	ret = compile_literal(comp, clean_pattern, cflags);
 
 	string_free(&clean_pattern);
 	return ret;

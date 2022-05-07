@@ -70,7 +70,7 @@ START_TEST(loop_test_interface__comp_and_match__offsets_ok)
     frec_match_t expect = curr.match;
 
     ck_assert_msg(ret == REG_OK,
-        "Matching did not return REG_OK for patern '%s' and text '%s' with flags '%d'",
+        "Matching did not return REG_OK for pattern '%s' and text '%s' with flags '%d'",
         curr.pattern, curr.text, curr.flags
     );
 
@@ -104,7 +104,7 @@ int main(void)
 	Suite *suite = create_interface_single_suite();
 	SRunner *runner = srunner_create(suite);
 
-	srunner_run_all(runner, CK_VERBOSE);
+	srunner_run_all(runner, CK_NORMAL);
 	int failed = srunner_ntests_failed(runner);
 	srunner_free(runner);
 

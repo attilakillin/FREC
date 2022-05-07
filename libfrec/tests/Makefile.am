@@ -1,10 +1,14 @@
 # Activate testing mechanism and select executables to test
-TESTS = check_boyer_moore check_heuristic check_interface_single
+TESTS = check_boyer_moore \
+        check_heuristic \
+        check_interface_single \
+        check_wu_manber
 
 # Only build these executables when 'make check' is called
 check_PROGRAMS = check_boyer_moore \
                  check_heuristic \
-                 check_interface_single
+                 check_interface_single \
+                 check_wu_manber
 
 # Configure sources and dependencies for the test executables
 check_boyer_moore_SOURCES = check_boyer_moore.c
@@ -21,3 +25,8 @@ check_interface_single_SOURCES = check_interface_single.c
 check_interface_single_CFLAGS = --std=c99 -I../include -I../lib
 check_interface_single_LDFLAGS = -L../lib
 check_interface_single_LDADD = -ltre -lfrec @CHECK_LIBS@
+
+check_wu_manber_SOURCES = check_wu_manber.c
+check_wu_manber_CFLAGS = --std=c99 -I../include -I../lib
+check_wu_manber_LDFLAGS = -L../lib
+check_wu_manber_LDADD = -ltre -lfrec @CHECK_LIBS@

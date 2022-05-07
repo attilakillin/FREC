@@ -13,7 +13,6 @@ static int
 run_preprocess_literal(const wchar_t *pattern, int flags)
 {
     bm_comp comp;
-    bm_comp_init(&comp, flags);
 
     string str;
     string_borrow(&str, pattern, (ssize_t) wcslen(pattern), true);
@@ -31,7 +30,6 @@ static int
 run_preprocess_full(const wchar_t *pattern, int flags)
 {
     bm_comp comp;
-    bm_comp_init(&comp, flags);
 
     string str;
     string_borrow(&str, pattern, (ssize_t) wcslen(pattern), true);
@@ -44,16 +42,15 @@ run_preprocess_full(const wchar_t *pattern, int flags)
 /* 
  * Runs the Boyer-Moore execution phase. Asserts that the preprocessing
  * succeeded, and returns the final execution return value as well as any
- * potential matches in the matches input variable.
+ * potential match in the match input variable.
  */
 static int
 run_execute(
-    frec_match_t *matches,
+    frec_match_t *match,
     const wchar_t *pattern, const wchar_t *text, int flags
 )
 {
     bm_comp comp;
-    bm_comp_init(&comp, flags);
 
     string str;
     string_borrow(&str, pattern, (ssize_t) wcslen(pattern), true);
@@ -65,7 +62,7 @@ run_execute(
 
     string txt;
     string_borrow(&txt, text, (ssize_t) wcslen(text), true);
-    ret = bm_execute(matches, &comp, txt, flags);
+    ret = bm_execute(match, &comp, txt, flags);
 
     bm_comp_free(&comp);
     return ret;
