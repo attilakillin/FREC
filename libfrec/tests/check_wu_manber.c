@@ -30,11 +30,12 @@ run_execute(
     );
 
     string txt;
-    string_borrow(&txt, text, (ssize_t) strlen(text), true);
+    string_borrow(&txt, text, (ssize_t) strlen(text), false);
 
     ret = wm_execute(match, &comp, txt, 0);
 
     wm_comp_free(&comp);
+    free(strs);
     return ret;
 }
 
@@ -46,15 +47,22 @@ typedef struct exec_tuple {
     frec_match_t expected;
 } exec_tuple;
 
-#define EXEC_SUCC_LEN 5
+#define EXEC_SUCC_LEN 8
 static exec_tuple exec_successes[EXEC_SUCC_LEN] = {
-    /* Test with single patterns */
-    {{"exactly the same"}, 1, "exactly the same", 0, {0, 16}},
-    {{"alpha"}, 1, "alpha beta gamma delta", 0, {0, 5}},
-    /* Test with two patterns that match */
-    {{"alfa", "beta"}, 2, "alpha beta gamma delta", 0, {0, 5}},
-    {{"beta", "delta"}, 2, "alpha beta gamma delta", 0, {6, 10}},
-    {{"delta", "gamma"}, 2, "alpha beta gamma delta", 0, {11, 16}}
+    // Test with single patterns
+    {{"exactly the same"}, 1, "exactly the same", 0, {0, 16, 0}},
+    {{"alpha"}, 1, "alpha beta gamma delta", 0, {0, 5, 0}},
+    // Test with two patterns that match
+    {{"alpha", "beta"}, 2, "alpha beta gamma delta", 0, {0, 5, 0}},
+    {{"beta", "delta"}, 2, "alpha beta gamma delta", 0, {6, 10, 0}},
+    {{"delta", "gamma"}, 2, "alpha beta gamma delta", 0, {11, 16, 1}},
+
+    // Test with multiple patterns
+    {{"beta", "alpha", "delta", "gamma"}, 4, "alpha beta gamma delta", 0, {0, 5, 1}},
+
+    // Test with multiple patterns where not everything matches
+    {{"alpha", "what"}, 2, "alpha beta gamma delta", 0, {0, 5, 0}},
+    {{"long matching", "abc"}, 2, "only has long matching", 0, {9, 22, 0}}
 };
 
 START_TEST(loop_test_wm__successes__single_exec_succeeds)
@@ -65,18 +73,23 @@ START_TEST(loop_test_wm__successes__single_exec_succeeds)
         int ret = run_execute(&match, curr.patterns, curr.count, curr.text);
 
         ck_assert_msg(ret == REG_OK,
-            "Execution did not succed: returned '%d' for element %d with text '%s' with flags '%d'",
-            ret, _i, curr.text, curr.flags
+            "Execution did not succed: returned '%d' for text '%s' with flags '%d'",
+            ret, curr.text, curr.flags
         );
 
         ck_assert_msg(match.soffset == curr.expected.soffset,
-            "Execution succeeded but match soffset differs: Got '%d' instead of '%d' for element %d with text '%s' with flags '%d'",
-            match.soffset, curr.expected.soffset, _i, curr.text, curr.flags
+            "Execution succeeded but match soffset differs: Got '%d' instead of '%d' for text '%s'",
+            match.soffset, curr.expected.soffset, curr.text
         );
 
         ck_assert_msg(match.eoffset == curr.expected.eoffset,
-            "Execution succeeded but match eoffset differs: Got '%d' instead of '%d' for element %d with text '%s' with flags '%d'",
-            match.eoffset, curr.expected.eoffset, _i, curr.text, curr.flags
+            "Execution succeeded but match eoffset differs: Got '%d' instead of '%d' for text '%s'",
+            match.eoffset, curr.expected.eoffset, curr.text
+        );
+
+        ck_assert_msg(match.pattern_id == curr.expected.pattern_id,
+            "Execution succeeded but match pattern id differs: Got '%d' instead of '%d' for text '%s'",
+            match.pattern_id, curr.expected.pattern_id, curr.text
         );
     }
 END_TEST

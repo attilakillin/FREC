@@ -161,7 +161,7 @@ string_index(string *str, ssize_t at)
     }
 }
 
-int
+bool
 string_compare(
     const string *str_a, ssize_t from_a,
     const string *str_b, ssize_t from_b, ssize_t count
@@ -171,8 +171,10 @@ string_compare(
     }
 
     if (str_a->is_wide) {
-        return memcmp(&str_a->wide[from_a], &str_b->wide[from_b], count);
+        return memcmp(&str_a->wide[from_a], &str_b->wide[from_b],
+                      sizeof(wchar_t) * count) == 0;
     } else {
-        return memcmp(&str_a->stnd[from_a], &str_b->stnd[from_b], count);
+        return memcmp(&str_a->stnd[from_a], &str_b->stnd[from_b],
+                      sizeof(char) * count) == 0;
     }
 }

@@ -20,8 +20,10 @@ wm_comp_free(wm_comp *comp)
 {
     if (comp != NULL) {
         hashtable_free(comp->shift);
+
         for (int i = 0; i < comp->count; i++) {
             string_free(&comp->patterns[i]);
         }
+        free(comp->patterns);
     }
 }

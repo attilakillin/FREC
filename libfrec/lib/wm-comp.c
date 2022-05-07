@@ -16,6 +16,7 @@ wm_compile(wm_comp *comp, string *patterns, ssize_t count, int cflags)
     if (!success) {
         return (REG_ESPACE);
     }
+    comp->shift_def = WM_B;
 
     // Copy patterns to compilation struct
     for (int i = 0; i < count; i++) {
@@ -87,7 +88,7 @@ wm_execute(frec_match_t *result, const wm_comp *comp, string text, int eflags)
 
     wm_entry s_entry, p_entry;
 
-    while (pos < text.len) {
+    while (pos <= text.len) {
         void *curr_char = string_index(&text, pos - WM_B);
         int ret = hashtable_get(comp->shift, curr_char, &s_entry);
 
@@ -110,23 +111,23 @@ wm_execute(frec_match_t *result, const wm_comp *comp, string text, int eflags)
                     unsigned char p_id = p_entry.prefix_list[i];
 
                     if (s_id < p_id) {
-                        pos++;
                         continue;
                     }
                     if (s_id > p_id) {
                         break;
                     }
 
+                    // If s_id == p_id, compare the pattern and the text
                     const string *curr_pat = &comp->patterns[s_id];
-                    if (text.len - pos >= curr_pat->len - comp->len_shortest) {
+                    ssize_t text_st = pos - comp->len_shortest;
+
+                    if (text_st <= text.len - curr_pat->len) {
                         if (string_compare(
-                            curr_pat, 0,
-                            &text, pos - curr_pat->len,
-                            curr_pat->len
+                            curr_pat, 0, &text, text_st, curr_pat->len
                         )) {
                             if (!(comp->cflags & REG_NOSUB) && result != NULL) {
-                                result->soffset = pos - curr_pat->len;
-                                result->eoffset = pos;
+                                result->soffset = text_st;
+                                result->eoffset = text_st + curr_pat->len;
                                 result->pattern_id = s_id;
                             }
                             return (REG_OK);
@@ -134,6 +135,8 @@ wm_execute(frec_match_t *result, const wm_comp *comp, string text, int eflags)
                     }
                 }
             }
+
+            pos++;
         }
     }
 
