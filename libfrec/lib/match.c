@@ -5,6 +5,7 @@
 #include "heuristic.h"
 #include "match.h"
 #include "string-type.h"
+#include "wm-comp.h"
 
 /* Utility functions. */
 static ssize_t max(ssize_t a, ssize_t b) { return (a > b) ? a : b; }
@@ -158,5 +159,54 @@ frec_match(
         return match_heuristic(pmatch, nmatch, hr, orig, text, eflags);
     } else {
         return match_original(pmatch, nmatch, orig, text, eflags);
+    }
+}
+
+int
+frec_mmatch(
+    frec_match_t pmatch[], size_t nmatch,
+    const mfrec_t *preg, string text, int eflags
+) {
+    bool no_sub = (preg->cflags & REG_NOSUB) || nmatch == 0 || pmatch == NULL;
+
+    // If the pattern count is 1, use the single pattern matcher above.
+    if (preg->type == MHEUR_SINGLE) {
+        return frec_match(pmatch, nmatch, &preg->patterns[0], text, eflags);
+    }
+
+    // The patterns are literal, we can use Wu-Manber directly.
+    if (preg->type == MHEUR_LITERAL) {
+        return wm_execute(pmatch, preg->wu_manber, text, eflags);
+    }
+
+    // We can use heuristics for optimization - search for the longest literal
+    // fragment of each pattern, and only call the regex automaton when a match
+    // is possible near our current position.
+    if (preg->type == MHEUR_LONGEST) {
+        // TODO Implement
+    }
+
+
+    // No way to speed up matching, so we simply run a single pattern matcher
+    // on each pattern one-by-one, and return the match with the earliest
+    // occurrence. This means that we may need to find a match for each pattern!
+    if (preg->type == MHEUR_NONE) {
+        if (no_sub) {
+            // If the actual offsets don't matter, we just need one match.
+            for (ssize_t i = 0; i < preg->count; i++) {
+                frec_t *curr = &preg->patterns[i];
+                int ret = frec_match(pmatch, nmatch, curr, text, eflags);
+
+                // If the result is REG_OK or an error, return immediately.
+                if (ret != REG_NOMATCH) {
+                    return ret;
+                }
+            }
+            return (REG_NOMATCH);
+        } else {
+            // Otherwise we may need up to count matches.
+
+            // TODO Implement
+        }
     }
 }

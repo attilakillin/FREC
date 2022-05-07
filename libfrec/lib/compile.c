@@ -31,7 +31,7 @@
 
 #include "bm.h"
 #include "frec-internal.h"
-#include "wu-manber.h"
+#include "wm-comp.h"
 
 // Compiles the bm_prep field of the frec struct based on the given pattern.
 // Additional flags can be specified in the cflags field.
@@ -127,9 +127,9 @@ frec_mcompile(mfrec_t *mfrec, const string *patterns, ssize_t n, int cflags) {
         return (REG_ESPACE);
     }
 
-    mfrec->k = n;
+    mfrec->err = -1;
+    mfrec->count = n;
     mfrec->cflags = cflags;
-    mfrec->searchdata = NULL; // TODO Bad name :(
 
     // Compile each pattern.
     for (ssize_t i = 0; i < n; i++) {
@@ -137,7 +137,8 @@ frec_mcompile(mfrec_t *mfrec, const string *patterns, ssize_t n, int cflags) {
         // On error, we record the index of the bad pattern.
         if (ret != REG_OK) {
             mfrec->err = i;
-            // TODO FREE mfrec
+            frec_mregfree(mfrec);
+            return ret;
         }
     }
 
@@ -159,7 +160,7 @@ frec_mcompile(mfrec_t *mfrec, const string *patterns, ssize_t n, int cflags) {
 
         for (ssize_t i = 0; i < n; i++) {
             frec_t *curr = &mfrec->patterns[i];
-            bool no_heur = curr->boyer_moore == NULL || curr->heuristic == NULL;
+            bool no_heur = curr->boyer_moore == NULL && curr->heuristic == NULL;
             if (no_heur) {
                 mfrec->type = MHEUR_NONE;
                 return (REG_OK);
@@ -170,62 +171,48 @@ frec_mcompile(mfrec_t *mfrec, const string *patterns, ssize_t n, int cflags) {
     }
 
     // If we reach this point, we'll definitely need this struct.
-    wmsearch_t *wumanber = malloc(sizeof(wmsearch_t));
-    if (wumanber == NULL) {
-        // TODO Free mfrec
+    wm_comp *comp = malloc(sizeof(wm_comp));
+    if (comp == NULL) {
+        frec_mregfree(mfrec);
+        return (REG_ESPACE);
     }
-    wumanber->cflags = cflags;
+    mfrec->wu_manber = comp;
 
-    // TODO Uncomment remaining parts
-    return (REG_OK);
-}
-    /*
     // If the heuristic type was literal, we'll use the patterns as-is.
     if (mfrec->type == MHEUR_LITERAL) {
-        int ret = frec_wmcomp(wumanber, patterns, n, cflags);
+        int ret = wm_compile(comp, patterns, n, cflags);
         if (ret != REG_OK) {
-            // TODO Free mfrec, wumanber
+            frec_mregfree(mfrec);
             return ret;
         }
     } else {
         // Otherwise, we'll assemble the patterns from the Boyer-Moore
         // or the heuristic compilation phase.
-        const wchar_t **pat_ptrs = malloc(sizeof(wchar_t *) * k);
-        if (pat_ptrs == NULL) {
-            // TODO Free mfrec, wumanber
-            return (REG_ESPACE);
-        }
-        size_t *len_ptrs = malloc(sizeof(size_t) * k);
-        if (len_ptrs == NULL) {
-            // TODO free mfrec, wumanber, pat_ptrs
+        string *pat_refs = malloc(sizeof(string) * n);
+        if (pat_refs == NULL) {
+            frec_mregfree(mfrec);
             return (REG_ESPACE);
         }
 
         // Reference values from previous optimalizations.
-        for (size_t i = 0; i < k; i++) {
+        for (size_t i = 0; i < n; i++) {
             frec_t *curr = &mfrec->patterns[i];
             if (curr->boyer_moore != NULL) {
-                pat_ptrs[i] = curr->boyer_moore->wide.pattern;
-                len_ptrs[i] = curr->boyer_moore->wide.len;
+                string_reference(&pat_refs[i], curr->boyer_moore->pattern);
             } else {
-                pat_ptrs[i] = curr->heuristic->literal_comp->wide.pattern;
-                len_ptrs[i] = curr->heuristic->literal_comp->wide.len;
+                string_reference(&pat_refs[i], curr->heuristic->literal_comp.pattern);
             }
         }
 
         // Execute compilation and free temporary arrays.
-        int ret = frec_wmcomp(wumanber, k, pat_ptrs, len_ptrs, cflags);
-        free(pat_ptrs);
-        free(len_ptrs);
+        int ret = wm_compile(comp, pat_refs, n, cflags);
+        free(pat_refs);
 
         if (ret != REG_OK) {
-            // TODO Free mfrec, wumanber
+            frec_mregfree(mfrec);
             return ret;
         }
     }
 
-    mfrec->searchdata = wumanber; // TODO I don't like this name
-    
     return (REG_OK);
 }
-*/

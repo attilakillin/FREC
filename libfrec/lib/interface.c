@@ -26,17 +26,14 @@
 
 #include <stdbool.h>
 #include <stdlib.h>
-#include <string-type.h>
 #include <wchar.h>
 #include <string.h>
 
-#include "bm-type.h"
 #include "compile.h"
 #include "heuristic.h"
 #include "match.h"
 #include "frec-internal.h"
 #include "string-type.h"
-#include "wu-manber.h"
 
 int
 frec_regncomp(frec_t *preg, const char *regex, size_t len, int cflags)
@@ -88,18 +85,10 @@ frec_regwcomp(frec_t *preg, const wchar_t *regex, int cflags)
 	return frec_regwncomp(preg, regex, len, cflags);
 }
 
-void
-frec_regfree(frec_t *preg)
-{
-	bm_comp_free(preg->boyer_moore);
-    free(preg->boyer_moore);
-	frec_free_heur(preg->heuristic);
-	_dist_regfree(&preg->original);
-}
 
 static int
 execute_match(const void *preg, string text,
-    size_t nmatch, frec_match_t pmatch[], int eflags, int type, bool multi)
+    size_t nmatch, frec_match_t pmatch[], int eflags, bool multi)
 {
     // Handle REG_STARTEND and optional start and end offsets.
     ssize_t offset_start = 0;
@@ -123,8 +112,7 @@ execute_match(const void *preg, string text,
     int ret;
     if (multi) {
         nosub_not_set = (((mfrec_t *)preg)->cflags & REG_NOSUB) == 0;
-        // TODO Fix this call
-        ret = oldfrec_mmatch(text.wide, text.len, type, nmatch, pmatch, eflags, preg);
+        ret = frec_mmatch(pmatch, nmatch, preg, text, eflags);
     } else {
         nosub_not_set = (((frec_t *)preg)->cflags & REG_NOSUB) == 0;
         ret = frec_match(pmatch, nmatch, preg, text, eflags);
@@ -150,7 +138,7 @@ frec_regnexec(const frec_t *preg, const char *str, size_t len,
     string text;
     string_borrow(&text, str, (ssize_t) len, false);
 
-	return execute_match(preg, text, nmatch, pmatch, eflags, STR_BYTE, false);
+	return execute_match(preg, text, nmatch, pmatch, eflags, false);
 }
 
 int
@@ -169,7 +157,7 @@ frec_regwnexec(const frec_t *preg, const wchar_t *str, size_t len,
     string text;
     string_borrow(&text, str, (ssize_t) len, true);
 
-	return execute_match(preg, text, nmatch, pmatch, eflags, STR_WIDE, false);
+	return execute_match(preg, text, nmatch, pmatch, eflags, false);
 }
 
 int
@@ -265,17 +253,6 @@ frec_mregwcomp(mfrec_t *preg, size_t nr, const wchar_t **regex, int cflags)
     return ret;
 }
 
-void
-frec_mregfree(mfrec_t *preg)
-{
-	if (preg != NULL) {
-        for (ssize_t i = 0; i < preg->k; i++) {
-            frec_regfree(&preg->patterns[i]);
-        }
-
-		frec_wmfree(preg->searchdata);
-	}
-}
 
 int
 frec_mregnexec(
@@ -285,7 +262,7 @@ frec_mregnexec(
     string text;
     string_borrow(&text, str, (ssize_t) len, false);
 
-	return execute_match(preg, text, nmatch, pmatch, eflags, STR_BYTE, true);
+	return execute_match(preg, text, nmatch, pmatch, eflags, true);
 }
 
 int
@@ -304,7 +281,7 @@ frec_mregwnexec(
     string text;
     string_borrow(&text, str, (ssize_t) len, false);
 
-	return execute_match(preg, text, nmatch, pmatch, eflags, STR_WIDE, true);
+	return execute_match(preg, text, nmatch, pmatch, eflags, true);
 }
 
 int

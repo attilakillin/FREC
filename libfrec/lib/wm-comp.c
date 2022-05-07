@@ -9,7 +9,7 @@ static ssize_t min(ssize_t a, ssize_t b) { return (a < b) ? a : b; }
 
 
 int
-wm_compile(wm_comp *comp, string *patterns, ssize_t count, int cflags)
+wm_compile(wm_comp *comp, const string *patterns, ssize_t count, int cflags)
 {
     // Zero-initialize compilation struct.
     bool success = wm_comp_init(comp, count, cflags);

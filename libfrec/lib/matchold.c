@@ -72,7 +72,7 @@ oldfrec_mmatch(const void *str, size_t len, int type, size_t nmatch,
 
 		if (!need_offsets) {
 			/* Run matches for each pattern until a match is found */
-			for (size_t i = 0; i < preg->k; i++) {
+			for (size_t i = 0; i < preg->count; i++) {
 				ret = oldfrec_match(&preg->patterns[i], str, len, type,
 					0, NULL, eflags);
 				if (ret == REG_OK)
@@ -88,17 +88,17 @@ oldfrec_mmatch(const void *str, size_t len, int type, size_t nmatch,
 			bool matched = false;
 
 			/* Alloc one frec_match_t for each pattern */
-			pm = malloc(preg->k * sizeof(frec_match_t *));
+			pm = malloc(preg->count * sizeof(frec_match_t *));
 			if (!pm)
 				return (REG_ESPACE);
-			for (i = 0; i < preg->k; i++) {
+			for (i = 0; i < preg->count; i++) {
 				pm[i] = malloc(nmatch * sizeof(frec_match_t));
 				if (!pm[i])
 					goto finish1;
 			}
 
 			/* Run matches for each pattern and save first matching offsets. */
-			for (i = 0; i < preg->k; i++) {
+			for (i = 0; i < preg->count; i++) {
 				ret = oldfrec_match(&preg->patterns[i], str, len, type,
 					nmatch, pm[i], eflags);
 
@@ -117,7 +117,7 @@ oldfrec_mmatch(const void *str, size_t len, int type, size_t nmatch,
 			} else {
 				/* If there are matches, find the first one. */
 				first = 0;
-				for (i = 1; i < preg->k; i++) {
+				for (i = 1; i < preg->count; i++) {
 					if (pm[i][0].soffset == -1)
 						continue;
 					else if ((pm[i][0].soffset < pm[first][0].soffset) ||
@@ -137,7 +137,7 @@ oldfrec_mmatch(const void *str, size_t len, int type, size_t nmatch,
 
 finish1:
 			if (pm) {
-				for (i = 0; i < preg->k; i++)
+				for (i = 0; i < preg->count; i++)
 					if (pm[i])
 						free(pm[i]);
 				free(pm);
@@ -167,7 +167,7 @@ finish1:
 
 		while (st < len) {
 			/* Look for a possible match. */
-			ret = frec_wmexec(preg->searchdata, INPUT(st), len, type,
+			ret = frec_wmexec(preg->wu_manber, INPUT(st), len, type,
 			    1, &rpm, eflags);
 			if (ret != REG_OK)
 				goto finish2;
@@ -242,7 +242,7 @@ finish2:
 
 		DEBUG_PRINT("matching multiple literal patterns");
 
-		return frec_wmexec(preg->searchdata, str, len, type, nmatch,
+		return frec_wmexec(preg->wu_manber, str, len, type, nmatch,
 		    pmatch, eflags);
 	}
 
