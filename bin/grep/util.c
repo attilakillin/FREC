@@ -277,7 +277,7 @@ procline(struct str *l, int nottext)
 	/* Loop to process the whole line */
 	while (st < l->len) {
 		pmatch.soffset = st;
-		pmatch.soffset = l->len;
+		pmatch.eoffset = l->len;
 
 		r = frec_mregexec(&preg, l->dat, 1, &pmatch, eflags);
 		st = (cflags & REG_NOSUB) ? (size_t)l->len :
@@ -295,7 +295,7 @@ procline(struct str *l, int nottext)
 		 */
 		if (xflag)
 			if (pmatch.soffset != 0 ||
-			    (size_t)pmatch.soffset != l->len)
+			    (size_t)pmatch.eoffset != l->len)
 			   break;
 
 		/* If reached here, we have a match. */

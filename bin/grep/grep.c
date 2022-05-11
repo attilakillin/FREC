@@ -48,7 +48,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <tre/regex.h>
+#include <tre/tre.h>
 #include <frec.h>
 
 #ifdef WITHOUT_FGETLN
