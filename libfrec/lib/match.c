@@ -63,7 +63,7 @@ match_heuristic(
 
             // If no candidates were found, return as such.
             if (ret != REG_OK) {
-                return (REG_NOMATCH);
+                return ret;
             }
 
             ssize_t start = candidate.soffset;
@@ -183,30 +183,146 @@ frec_mmatch(
     // fragment of each pattern, and only call the regex automaton when a match
     // is possible near our current position.
     if (preg->type == MHEUR_LONGEST) {
-        // TODO Implement
+        frec_match_t candidate;
+        ssize_t glob_offset = 0; // Global offset from the start of input.
+        int ret;
+
+        // While we have text to read.
+        while (text.len > 0) {
+
+            // Find candidate match, or return early if no match was found.
+            ret = wm_execute(&candidate, preg->wu_manber, text, eflags);
+            if (ret != REG_OK) {
+                return ret;
+            }
+
+            ssize_t start = candidate.soffset;
+            ssize_t end = candidate.eoffset;
+
+            heur *heur = preg->patterns[candidate.pattern_id].heuristic;
+
+            if (heur->max_length != -1) {
+                // If we know the max length of a match, set start
+                // and end to have exactly that much wiggle room.
+                ssize_t delta = heur->max_length - (end - start);
+
+                start = max(0, start - delta);
+                end = min(text.len, end + delta);
+            } else {
+                // If we don't know its max length, we know that a
+                // match never overlaps multiple lines. As such, we
+                // set start and end to the nearest line breaks.
+
+                start = find_lf_backward(text, start);
+                end = find_lf_forward(text, end);
+            }
+
+            // Create a text excerpt from this section, and call the
+            // library supplied matcher for at most one match.
+            string section;
+            string_borrow_section(&section, text, start, end);
+
+            frec_t *curr_preg = &preg->patterns[candidate.pattern_id];
+            ret = frec_match(pmatch, nmatch, curr_preg, section, eflags);
+
+            // If we found a match, break out of the while loop.
+            // The match was found relative to glob_offset + start.
+            if (ret == REG_OK) {
+                glob_offset += start;
+                break;
+            }
+
+            // Else modify the offsets and continue with the rest of the text.
+            // No match was found before end, so we can shift the offset by it.
+            string_offset(&text, end);
+            glob_offset += end;
+        }
+
+        // If we found a match, we'll fix the offsets in all its submatches.
+        if (ret == REG_OK) {
+            for (size_t i = 0; i < nmatch && pmatch[i].soffset != -1; i++) {
+                pmatch[i].soffset += glob_offset;
+                pmatch[i].eoffset += glob_offset;
+            }
+        }
+
+        return ret;
     }
 
 
+    // Otherwise preg->type == MHEUR_NONE.
     // No way to speed up matching, so we simply run a single pattern matcher
     // on each pattern one-by-one, and return the match with the earliest
     // occurrence. This means that we may need to find a match for each pattern!
-    if (preg->type == MHEUR_NONE) {
-        if (no_sub) {
-            // If the actual offsets don't matter, we just need one match.
-            for (ssize_t i = 0; i < preg->count; i++) {
-                frec_t *curr = &preg->patterns[i];
-                int ret = frec_match(pmatch, nmatch, curr, text, eflags);
+    if (no_sub) {
+        // If the actual offsets don't matter, we just need one match.
+        for (ssize_t i = 0; i < preg->count; i++) {
+            frec_t *curr = &preg->patterns[i];
+            int ret = frec_match(pmatch, nmatch, curr, text, eflags);
 
-                // If the result is REG_OK or an error, return immediately.
-                if (ret != REG_NOMATCH) {
-                    return ret;
-                }
+            // If the result is REG_OK or an error, return immediately.
+            if (ret != REG_NOMATCH) {
+                return ret;
             }
+        }
+        return (REG_NOMATCH);
+    } else {
+        // Otherwise we may need up to count matches.
+        frec_match_t *matches = malloc(preg->count * sizeof(frec_match_t));
+        if (matches == NULL) {
+            return (REG_ESPACE);
+        }
+
+        // Match each pattern separately.
+        bool matched = false;
+        for (ssize_t i = 0; i < preg->count; i++) {
+            frec_t *curr = &preg->patterns[i];
+            int ret = frec_match(&matches[i], nmatch, curr, text, eflags);
+
+            if (ret == REG_OK) {
+                matched = true;
+            } else if (ret == REG_NOMATCH) {
+                matches[i].soffset = -1;
+            } else {
+                free(matches);
+                return ret;
+            }
+        }
+
+        // Handle results.
+        if (!matched) {
+            free(matches);
             return (REG_NOMATCH);
         } else {
-            // Otherwise we may need up to count matches.
+            ssize_t first = -1;
+            // Find the first match.
+            for (ssize_t i = 0; i < preg->count; i++) {
+                // Skip those where no match was found.
+                if (matches[i].soffset == -1) {
+                    continue;
+                }
+                if (first == -1) {
+                    // Set the initial first index.
+                    first = i;
+                } else {
+                    // Else compare the start indices of current and first.
+                    if (matches[i].soffset < matches[first].soffset) {
+                        first = i;
+                    }
+                }
+            }
 
-            // TODO Implement
+            // Now that we have the correct index, we'll run a frec_match
+            // with every submatch available.
+            string section;
+            string_borrow_section(&section, text,
+                    matches[first].soffset, matches[first].eoffset);
+
+            int ret = frec_match(pmatch, nmatch,
+                    &preg->patterns[first], section, eflags);
+
+            free(matches);
+            return ret;
         }
     }
 }

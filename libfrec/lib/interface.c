@@ -296,13 +296,9 @@ size_t
 frec_mregerror(int errcode, const mfrec_t *preg, int *errpatn, char *errbuf,
     size_t errbuf_size)
 {
-
-	DEBUG_PRINT("enter");
-
 	if (errpatn)
 		*errpatn = preg->err;
 
 	int ret = _dist_regerror(errcode, NULL, errbuf, errbuf_size);
-	DEBUG_PRINTF("returning %d", ret);
 	return ret;
 }
