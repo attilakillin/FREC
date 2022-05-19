@@ -276,10 +276,12 @@ procline(struct str *l, int nottext)
 
 	/* Loop to process the whole line */
 	while (st < l->len) {
-		pmatch.soffset = st;
-		pmatch.eoffset = l->len;
-
-		r = frec_mregexec(&preg, l->dat, 1, &pmatch, eflags);
+		//pmatch.soffset = st;
+		//pmatch.eoffset = l->len;
+        pmatch.soffset = 0;
+        pmatch.eoffset = l->len - st;
+        r = frec_mregnexec(&preg, l->dat + st, l->len - st, 1, &pmatch, eflags);
+		//r = frec_mregexec(&preg, l->dat, 1, &pmatch, eflags);
 		st = (cflags & REG_NOSUB) ? (size_t)l->len :
 		    (size_t)pmatch.soffset;
 		if (r == REG_NOMATCH)

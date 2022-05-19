@@ -196,25 +196,33 @@ frec_mmatch(
                 return ret;
             }
 
+            // TODO issue: If REG_NOSUB was set at compilation time,
+            // wm_execute won't register the offsets in candidate even
+            // though right now, it would be necessary.
+
             ssize_t start = candidate.soffset;
             ssize_t end = candidate.eoffset;
 
             heur *heur = preg->patterns[candidate.pattern_id].heuristic;
 
-            if (heur->max_length != -1) {
-                // If we know the max length of a match, set start
-                // and end to have exactly that much wiggle room.
-                ssize_t delta = heur->max_length - (end - start);
+            // If heur is not null, then the pattern wasn't literal, and
+            // as such, we need to modify start and end.
+            if (heur != NULL) {
+                if (heur->max_length != -1) {
+                    // If we know the max length of a match, set start
+                    // and end to have exactly that much wiggle room.
+                    ssize_t delta = heur->max_length - (end - start);
 
-                start = max(0, start - delta);
-                end = min(text.len, end + delta);
-            } else {
-                // If we don't know its max length, we know that a
-                // match never overlaps multiple lines. As such, we
-                // set start and end to the nearest line breaks.
+                    start = max(0, start - delta);
+                    end = min(text.len, end + delta);
+                } else {
+                    // If we don't know its max length, we know that a
+                    // match never overlaps multiple lines. As such, we
+                    // set start and end to the nearest line breaks.
 
-                start = find_lf_backward(text, start);
-                end = find_lf_forward(text, end);
+                    start = find_lf_backward(text, start);
+                    end = find_lf_forward(text, end);
+                }
             }
 
             // Create a text excerpt from this section, and call the
