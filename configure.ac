@@ -33,7 +33,12 @@ AC_CHECK_HEADERS_ONCE([tre/regex.h])
 
 # Set project configuration headers and Makefiles
 AC_CONFIG_HEADERS([config.h])
-AC_CONFIG_FILES([Makefile bin/Makefile bin/grep/Makefile lib/Makefile lib/libfrec/Makefile tests/Makefile])
+
+AC_CONFIG_FILES(m4_normalize([
+    Makefile
+    bin/Makefile bin/grep/Makefile
+    libfrec/Makefile libfrec/lib/Makefile libfrec/tests/Makefile
+]))
 
 # Output configuration files
 AC_OUTPUT

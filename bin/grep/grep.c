@@ -42,12 +42,14 @@
 #include <limits.h>
 #include <libgen.h>
 #include <locale.h>
-#include <mregex.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#include <tre/tre.h>
+#include <frec.h>
 
 #ifdef WITHOUT_FGETLN
 #include "fgetln.h"
@@ -95,7 +97,7 @@ bool		 matchall;
 unsigned int 	 patterns;
 char		**pats;
 size_t		*lens;
-mregex_t	 preg;
+mfrec_t	 preg;
 
 /* Filename exclusion/inclusion patterns */
 unsigned int	fpatterns, dpatterns;

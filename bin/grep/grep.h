@@ -30,7 +30,7 @@
  */
 
 #include <limits.h>
-#include <mregex.h>
+#include <frec.h>
 #include <stdbool.h>
 #include <stdio.h>
 
@@ -138,7 +138,7 @@ extern int	 tail;
 extern unsigned int dpatterns, fpatterns, patterns;
 extern struct pat *pattern;
 extern struct epat *dpattern, *fpattern;
-extern mregex_t preg;
+extern mfrec_t preg;
 
 /* For regex errors  */
 #define RE_ERROR_BUF	512
