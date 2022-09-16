@@ -205,17 +205,17 @@ START_TEST(loop_test_bm__successes__single_exec_succeeds)
     int ret = run_execute(&match, current.pattern, current.text, current.flags);
 
     ck_assert_msg(ret == REG_OK,
-        "Execution did not succed: returned '%d' for pattern '%ls' and text '%s' with flags '%d'",
+        "Execution did not succeed: returned '%d' for pattern '%ls' and text '%ls' with flags '%d'",
         ret, current.pattern, current.text, current.flags
     );
 
     ck_assert_msg(match.soffset == current.expected.soffset,
-        "Execution succeeded but match soffset differs: Got '%d' instead of '%d' for pattern '%ls' and text '%s' with flags '%d'",
+        "Execution succeeded but match soffset differs: Got '%ld' instead of '%d' for pattern '%ls' and text '%ls' with flags '%d'",
         match.soffset, current.expected.soffset, current.pattern, current.text, current.flags
     );
 
     ck_assert_msg(match.eoffset == current.expected.eoffset,
-        "Execution succeeded but match eoffset differs: Got '%d' instead of '%d' for pattern '%ls' and text '%s' with flags '%d'",
+        "Execution succeeded but match eoffset differs: Got '%ld' instead of '%d' for pattern '%ls' and text '%ls' with flags '%d'",
         match.eoffset, current.expected.eoffset, current.pattern, current.text, current.flags
     );
 }

@@ -709,8 +709,7 @@ main(int argc, char *argv[])
 	}
 
 	/* Compile patterns. */
-	ptr = (const char **)pats;
-	c = frec_mregncomp(&preg, patterns, ptr, lens, cflags);
+	c = frec_mregncomp(&preg, patterns, pats, lens, cflags);
 	if (c != 0) {
 	  int no;
 
