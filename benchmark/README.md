@@ -98,3 +98,24 @@ Example usage:
 Cleaning up the output folder is the user's responsibility, these scripts don't
 remove anything during execution. In the above example, this means running
 `rm ./work/*`.
+
+## Benchmarking the multi-pattern matcher
+
+The `run-benchmark-multi.sh` script can be used in conjunction with the previous scripts to test the multi-pattern matching algorithm. The script works a bit differently as the single-pattern matcher, as it has no specific flavors. A single run will execute the query on the system-supplied `grep` command, as well as on the executable supplied by the argument.
+
+The `bin` folder in the project root contains an executable built around the multi-pattern matcher, which can be used for testing. An example call:
+
+    ./run-benchmark-multi.sh ../bin/grep/grep ./inputs/inputs-enwiki-multi.txt ./texts/enwiki ./work
+
+The arguments in order:
+
+- The custom executable to test multi-pattern matching on.
+- A pattern file. Each line in this file will be used as a pattern to search for
+  in the text file.
+- A text file to search in.
+- A folder where the output files will be written.
+
+The pattern file must be somewhat different. Instead of a single pattern per line, multiple patterns can be supplied, separated by the `,` character.
+
+The output files will contain the start and end offset of each match the executable has found, as well as the number of matches that were found.
+To compare these automatically, use `compare-outputs.sh`, as seen above.

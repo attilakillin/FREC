@@ -23,44 +23,21 @@ text=$3
 out_folder=$4
 flavors=`echo $5 | sed "s/,/ /g"`
 
-# Runs the specified command and prints its run time in minutes and seconds.
-# Parameters: $1: The command(s) to run.
-#             $2: The file to write the output to.
-#             $3: The prefix string to write in front of the run time.
-# Returns: The return value of the command.
-time_run() {
-    st_date=`date +"%s"`
-
-    eval $1 1> $2
-    ret=$?
-
-    en_date=`date +"%s"`
-
-    diff=$(($en_date-$st_date))
-    count=`wc -l < $2`
-    
-	printf "    %-8s - %2dm%02ds - %8d matches\n" $3 $(($diff / 60)) $(($diff % 60)) $count
-
-    return $ret
-}
-
 # Benchmark specific flavors with the given pattern and text.
 # Two base filenames have to supplied, these will be extended by -frec,
 # -posix, or -tre depending on the variant.
-# Parameters: $1: The base filename of the grep executables.
-#             $2: The pattern to use for the search.
-#             $3: The file to search in.
-#             $4: The base filename where the output will be written.
-#             $5: The flavors to use.
+# Parameters: $1: The pattern to use for the search.
+#             $2: The base filename where the output will be written.
+#             $3: The flavors to use.
 # Returns: The return value of the compare_outputs command.
 benchmark_with() {
-    echo "> Running benchmarks... | \"$2\" | $3 |"
+    echo "> Running benchmarks... | \"$1\" | $text |"
 
-    for var in $5; do
-        time_run "$1-$var -e \"$2\" \"$3\"" $4 $var
+    for var in $3; do
+        ./time-run.sh "$exec_base-$var -e \"$1\" \"$text\"" $2 $var
 
-        if [ "$4" != "/dev/null" ]; then
-            mv $4 "$4-$var"
+        if [ "$2" != "/dev/null" ]; then
+            mv $2 "$2-$var"
         fi
     done
 }
@@ -72,7 +49,7 @@ i=1
 # Read each pattern from the patterns file
 while read -r line; do
     # And run a benchmark with it
-    benchmark_with "$exec_base" "$line" "$text" "$out_folder/out-$i" "$flavors"
+    benchmark_with "$line" "$out_folder/out-$i" "$flavors"
     i=$(($i+1))
 done < "$patterns"
 
