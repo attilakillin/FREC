@@ -189,16 +189,11 @@ frec_mmatch(
 
         // While we have text to read.
         while (text.len > 0) {
-
             // Find candidate match, or return early if no match was found.
             ret = wm_execute(&candidate, preg->wu_manber, text, eflags);
             if (ret != REG_OK) {
                 return ret;
             }
-
-            // TODO issue: If REG_NOSUB was set at compilation time,
-            // wm_execute won't register the offsets in candidate even
-            // though right now, it would be necessary.
 
             ssize_t start = candidate.soffset;
             ssize_t end = candidate.eoffset;

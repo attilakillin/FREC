@@ -125,7 +125,12 @@ wm_execute(frec_match_t *result, const wm_comp *comp, string text, int eflags)
                         if (string_compare(
                             curr_pat, 0, &text, text_st, curr_pat->len
                         )) {
-                            if (!(comp->cflags & REG_NOSUB) && result != NULL) {
+                            // Whether or not we should substitute.
+                            bool sub = !(comp->cflags & REG_NOSUB) && result != NULL;
+                            // TODO Temporary fix, nosub generally isn't used.
+                            sub = true;
+
+                            if (sub) {
                                 result->soffset = text_st;
                                 result->eoffset = text_st + curr_pat->len;
                                 result->pattern_id = s_id;
