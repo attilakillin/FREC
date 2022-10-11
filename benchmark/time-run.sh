@@ -16,6 +16,6 @@ en_date=`date +"%s"`
 diff=$(($en_date-$st_date))
 count=`wc -l < $2`
     
-printf "    %-8s - %2dm%02ds - %8d matches\n" $3 $(($diff / 60)) $(($diff % 60)) $count
+printf "    %-8s - %2dm%02ds - %8d matches\n" "$3" $(($diff / 60)) $(($diff % 60)) $count
 
 return $ret

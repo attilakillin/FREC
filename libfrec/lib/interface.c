@@ -296,7 +296,7 @@ size_t
 frec_mregerror(int errcode, const mfrec_t *preg, int *errpatn, char *errbuf,
     size_t errbuf_size)
 {
-	if (errpatn)
+	if (errpatn != NULL)
 		*errpatn = preg->err;
 
 	int ret = _dist_regerror(errcode, NULL, errbuf, errbuf_size);
