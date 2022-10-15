@@ -1,3 +1,7 @@
+/*
+ * Grep Multi: Builds an executable that can be used to find every match
+ * in a text with multiple given patterns.
+ */
 
 #include <frec.h>
 #include <sys/mman.h>
@@ -51,7 +55,7 @@ main(int argc, char *argv[])
         exit(2);
     }
 
-    // Compile pattern using variant-specific macros.
+    // Compile pattern.
     int ret;
 
     mfrec_t preg;

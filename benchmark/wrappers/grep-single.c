@@ -1,3 +1,8 @@
+/*
+ * Grep Single: Given properly defined flags, builds an executable
+ * that can be used to find every match in a text for a single
+ * given pattern.
+ */
 
 #ifdef USE_FREC
     #include <frec.h>

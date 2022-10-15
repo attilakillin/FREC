@@ -105,15 +105,18 @@ The `run-benchmark-multi.sh` script can be used in conjunction with the previous
 
 The `bin` folder in the project root contains an executable built around the multi-pattern matcher, which can be used for testing. An example call:
 
-    ./run-benchmark-multi.sh ../bin/grep/grep ./inputs/inputs-enwiki-multi.txt ./texts/enwiki ./work
+    ./run-benchmark-multi.sh ./wrappers/grep ./inputs/inputs-enwiki-multi.txt ./texts/enwiki ./work frec-multi frec,tre
 
 The arguments in order:
 
-- The custom executable to test multi-pattern matching on.
+- The base executable path and name of the executable flavors. Will be extended
+  by a dash and the flavor (so that `grep` becomes `grep-frec` or `grep-tre`).
 - A pattern file. Each line in this file will be used as a pattern to search for
   in the text file.
 - A text file to search in.
 - A folder where the output files will be written.
+- The multi-pattern flavor to use.
+- The comma-separated list of single-pattern flavors to benchmark.
 
 The pattern file must be somewhat different. Instead of a single pattern per line, multiple patterns can be supplied, separated by the `,` character.
 
