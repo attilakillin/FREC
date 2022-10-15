@@ -1,11 +1,11 @@
 CFLAGS = --std=c99 -ggdb -I../../libfrec/include -I../../libfrec/lib
 
-all: grep-frec grep-posix grep-tre grep-frec-multi grep-ff-frec grep-ff-tre grep-ff-posix
+all: grep-frec grep-posix grep-tre grep-frec-multi grep-ff-frec grep-ff-tre grep-ff-posix grep-ff-frec-multi
 
 clean:
 	rm -f ./*.o
 	rm -f grep-frec grep-posix grep-tre grep-frec-multi
-	rm -f grep-ff-frec grep-ff-posix grep-ff-tre
+	rm -f grep-ff-frec grep-ff-posix grep-ff-tre grep-ff-multi
 
 # Single pattern-matcher object and executable files
 
@@ -56,3 +56,11 @@ grep-ff-posix: grep-ff-posix.o
 
 grep-ff-tre: grep-ff-tre.o
 	gcc -o $@ $< -ltre
+
+# Multi pattern-matcher object and executable files
+
+grep-ff-frec-multi.o: grep-ff-multi.c
+	gcc -c -o $@ $< $(CFLAGS) -DUSE_FREC
+
+grep-ff-frec-multi: grep-ff-frec-multi.o
+	gcc -o $@ $< -L../../libfrec/lib -lfrec -ltre
