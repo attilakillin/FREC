@@ -31,6 +31,7 @@
 
 #include "bm.h"
 #include "frec-internal.h"
+#include "regex-parser.h"
 #include "wm-comp.h"
 
 // Compiles the bm_prep field of the frec struct based on the given pattern.
@@ -90,6 +91,36 @@ compile_heuristic(frec_t *frec, string pattern, int cflags)
     return ret;
 }
 
+static bool
+is_pattern_literal(string pattern, int in_flags)
+{
+    regex_parser parser;
+	parser.escaped = false;
+	parser.extended = in_flags & REG_EXTENDED;
+
+    // Traverse the pattern:
+	for (ssize_t i = 0; i < pattern.len; i++) {
+        parse_result result;
+        if (pattern.is_wide) {
+            result = parse_wchar(&parser, pattern.wide[i]);
+        } else {
+            result = parse_char(&parser, pattern.stnd[i]);
+        }
+
+		switch (result) {
+			case NORMAL_CHAR:
+			case NORMAL_NEWLINE:
+			case SHOULD_SKIP:
+				break;
+			/* If any special character was found, we know the pattern.
+             * isn't literal. */            
+			default:
+				return false;
+		}
+	}
+
+    return true;
+}
 
 int
 frec_compile(frec_t *frec, string pattern, int cflags)
@@ -104,7 +135,15 @@ frec_compile(frec_t *frec, string pattern, int cflags)
         return ret;
     }
 
-    // Try and compile BM prep struct irrespective of the REG_LITERAL flag.
+    /* Check if pattern is literal. */
+    bool is_literal = (cflags & REG_LITERAL) || is_pattern_literal(pattern, cflags);
+    frec->is_literal = is_literal;
+
+    // Try and compile BM prep struct. Modify the REG_LITERAL flag if needed.
+    int flags = cflags;
+    if (is_literal) {
+        cflags |= REG_LITERAL;
+    }
     ret = compile_boyer_moore(frec, pattern, cflags);
 
     // A heuristic approach is only needed if the pattern is not literal.
@@ -131,6 +170,8 @@ frec_mcompile(mfrec_t *mfrec, const string *patterns, ssize_t n, int cflags) {
     mfrec->count = n;
     mfrec->cflags = cflags;
 
+    bool are_literal = true;
+
     // Compile each pattern.
     for (ssize_t i = 0; i < n; i++) {
         int ret = frec_compile(&mfrec->patterns[i], patterns[i], cflags);
@@ -140,7 +181,14 @@ frec_mcompile(mfrec_t *mfrec, const string *patterns, ssize_t n, int cflags) {
             frec_mregfree(mfrec);
             return ret;
         }
+
+        /* If any one of the patterns wasn't literal, set this flag to false */
+        if (!mfrec->patterns[i].is_literal) {
+            are_literal = false;
+        }
     }
+
+    mfrec->are_literal = are_literal;
 
     // If there's only one pattern, return early.
     if (n == 1) {
@@ -149,7 +197,7 @@ frec_mcompile(mfrec_t *mfrec, const string *patterns, ssize_t n, int cflags) {
     }
 
     // Set the heuristic type based on the compilation flags.
-    if (cflags & REG_LITERAL) {
+    if (cflags & REG_LITERAL || are_literal) {
         // If the REG_LITERAL flag is set, use literal heuristics.
 
         mfrec->type = MHEUR_LITERAL;
