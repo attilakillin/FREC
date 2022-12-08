@@ -14,7 +14,7 @@
 #                 to benchmark on, e.g.: posix,tre.
 
 # Check arguments
-if [ $# -ne 6 ]; then
+if [ $# -ne 6 ] && [ $# -ne 5 ]; then
     printf "> ERROR: Invalid number of arguments! See source for more help!\n"
     exit 2
 fi
@@ -43,7 +43,7 @@ benchmark_with() {
     for var in $4; do
         i=0
         # For each pattern (comma is used as separator)
-        IFS=$','
+        IFS=$'&'
         for pattern in $1; do
             ./time-run.sh "$exec_base-$var -e \"$pattern\" \"$text\"" $2 "$var ($i)"
 
@@ -60,8 +60,8 @@ benchmark_with() {
     # Multi pattern matching:
 
     # Replace the beginning and the end of the line, and every comma inbetween.
-    # Meaning: '^' to '-e "' and '$' to '"' and every ',' to '" -e "'
-    patterns_template=`echo $1 | sed 's/^/-e "/;s/$/"/;s/,/" -e "/g'`
+    # Meaning: '^' to '-e "' and '$' to '"' and every '&' to '" -e "'
+    patterns_template=`echo $1 | sed 's/^/-e "/;s/$/"/;s/&/" -e "/g'`
 
     ./time-run.sh "$exec_base-$3 $patterns_template \"$text\"" $2 "$3"
 }

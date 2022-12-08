@@ -1,8 +1,5 @@
-Car,Hungary
-United States of America,Something that doesn't match,Slov[a-z][a-z]ia
-C[a-z]*a,[Ll]ongest
-Prefix.*:,[Pp]refix.*:
-Single
-Many,Separate,Inputs?,Present
-Eight,Different,Literals,That,Should,Execute,Quite,Quick
-La+s?t,Input
+Car&Hungary
+Eight&Different&Literals&That&Should&Execute&Quite&Quick
+United States of America&Something that doesn't match&Slov[a-z][a-z]ia
+Many&Separate&Inputs?&Present
+La+s?t&Input

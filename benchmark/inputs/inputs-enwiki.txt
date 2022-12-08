@@ -5,5 +5,8 @@ Something that doesn't match
 Slov[a-z][a-z]ia
 C[a-z]*a
 [Ll]ongest
-Prefix.*:
-[Pp]refix.*:
+Car.{1,2}
+Hung(.ry){1,2}
+United Sta.es of Ame(rica)
+N.*th(ing)
+U.?nited States of Ame(rica){1,2}
